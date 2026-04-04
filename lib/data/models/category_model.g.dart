@@ -27,18 +27,23 @@ const CategoryModelSchema = CollectionSchema(
       name: r'icon',
       type: IsarType.string,
     ),
-    r'limit': PropertySchema(
+    r'isProtected': PropertySchema(
       id: 2,
+      name: r'isProtected',
+      type: IsarType.bool,
+    ),
+    r'limit': PropertySchema(
+      id: 3,
       name: r'limit',
       type: IsarType.double,
     ),
     r'name': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'name',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'type',
       type: IsarType.byte,
       enumMap: _CategoryModeltypeEnumValueMap,
@@ -78,9 +83,10 @@ void _categoryModelSerialize(
 ) {
   writer.writeString(offsets[0], object.colorHex);
   writer.writeString(offsets[1], object.icon);
-  writer.writeDouble(offsets[2], object.limit);
-  writer.writeString(offsets[3], object.name);
-  writer.writeByte(offsets[4], object.type.index);
+  writer.writeBool(offsets[2], object.isProtected);
+  writer.writeDouble(offsets[3], object.limit);
+  writer.writeString(offsets[4], object.name);
+  writer.writeByte(offsets[5], object.type.index);
 }
 
 CategoryModel _categoryModelDeserialize(
@@ -93,10 +99,11 @@ CategoryModel _categoryModelDeserialize(
   object.colorHex = reader.readString(offsets[0]);
   object.icon = reader.readString(offsets[1]);
   object.id = id;
-  object.limit = reader.readDouble(offsets[2]);
-  object.name = reader.readString(offsets[3]);
+  object.isProtected = reader.readBool(offsets[2]);
+  object.limit = reader.readDouble(offsets[3]);
+  object.name = reader.readString(offsets[4]);
   object.type =
-      _CategoryModeltypeValueEnumMap[reader.readByteOrNull(offsets[4])] ??
+      _CategoryModeltypeValueEnumMap[reader.readByteOrNull(offsets[5])] ??
           CategoryType.fixed;
   return object;
 }
@@ -113,10 +120,12 @@ P _categoryModelDeserializeProp<P>(
     case 1:
       return (reader.readString(offset)) as P;
     case 2:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 3:
-      return (reader.readString(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 4:
+      return (reader.readString(offset)) as P;
+    case 5:
       return (_CategoryModeltypeValueEnumMap[reader.readByteOrNull(offset)] ??
           CategoryType.fixed) as P;
     default:
@@ -555,6 +564,16 @@ extension CategoryModelQueryFilter
   }
 
   QueryBuilder<CategoryModel, CategoryModel, QAfterFilterCondition>
+      isProtectedEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isProtected',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<CategoryModel, CategoryModel, QAfterFilterCondition>
       limitEqualTo(
     double value, {
     double epsilon = Query.epsilon,
@@ -844,6 +863,19 @@ extension CategoryModelQuerySortBy
     });
   }
 
+  QueryBuilder<CategoryModel, CategoryModel, QAfterSortBy> sortByIsProtected() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isProtected', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CategoryModel, CategoryModel, QAfterSortBy>
+      sortByIsProtectedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isProtected', Sort.desc);
+    });
+  }
+
   QueryBuilder<CategoryModel, CategoryModel, QAfterSortBy> sortByLimit() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'limit', Sort.asc);
@@ -920,6 +952,19 @@ extension CategoryModelQuerySortThenBy
     });
   }
 
+  QueryBuilder<CategoryModel, CategoryModel, QAfterSortBy> thenByIsProtected() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isProtected', Sort.asc);
+    });
+  }
+
+  QueryBuilder<CategoryModel, CategoryModel, QAfterSortBy>
+      thenByIsProtectedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isProtected', Sort.desc);
+    });
+  }
+
   QueryBuilder<CategoryModel, CategoryModel, QAfterSortBy> thenByLimit() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'limit', Sort.asc);
@@ -973,6 +1018,13 @@ extension CategoryModelQueryWhereDistinct
     });
   }
 
+  QueryBuilder<CategoryModel, CategoryModel, QDistinct>
+      distinctByIsProtected() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isProtected');
+    });
+  }
+
   QueryBuilder<CategoryModel, CategoryModel, QDistinct> distinctByLimit() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'limit');
@@ -1010,6 +1062,12 @@ extension CategoryModelQueryProperty
   QueryBuilder<CategoryModel, String, QQueryOperations> iconProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'icon');
+    });
+  }
+
+  QueryBuilder<CategoryModel, bool, QQueryOperations> isProtectedProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isProtected');
     });
   }
 

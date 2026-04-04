@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static const Color background = Color(0xFF0B0B0B);
@@ -11,11 +10,14 @@ class AppTheme {
   static const Color textLight = Color(0xFFFFFFFF);
   static const Color textMuted = Color(0xFF8A8D9F);
 
+  static const _inter = 'Inter';
+
   static ThemeData get darkTheme {
     return ThemeData(
       brightness: Brightness.dark,
       scaffoldBackgroundColor: background,
       primaryColor: accent,
+      fontFamily: _inter,
       colorScheme: const ColorScheme.dark(
         primary: accent,
         secondary: accentBlue,
@@ -23,21 +25,22 @@ class AppTheme {
         error: error,
         onSurface: textLight,
       ),
-      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).copyWith(
-        displayLarge: GoogleFonts.inter(color: textLight, fontWeight: FontWeight.bold),
-        bodyLarge: GoogleFonts.inter(color: textLight),
-        bodyMedium: GoogleFonts.inter(color: textMuted),
+      textTheme: ThemeData.dark().textTheme.copyWith(
+        displayLarge: const TextStyle(fontFamily: _inter, color: textLight, fontWeight: FontWeight.bold),
+        bodyLarge: const TextStyle(fontFamily: _inter, color: textLight),
+        bodyMedium: const TextStyle(fontFamily: _inter, color: textMuted),
       ),
       cardTheme: CardThemeData(
         color: cardSurface,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       ),
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: TextStyle(
+          fontFamily: _inter,
           color: textLight,
           fontSize: 20,
           fontWeight: FontWeight.w600,

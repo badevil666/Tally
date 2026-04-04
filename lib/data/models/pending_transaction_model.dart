@@ -10,4 +10,5 @@ class PendingTransactionModel {
   String merchantName = 'Unknown Merchant';
   String rawBody = '';
   DateTime timestamp = DateTime.now();
+  int notificationId = 0;
 }

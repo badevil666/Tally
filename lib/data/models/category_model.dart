@@ -20,4 +20,5 @@ class CategoryModel {
 
   String icon = '';
   String colorHex = '';
+  bool isProtected = false;
 }

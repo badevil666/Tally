@@ -28,13 +28,18 @@ const PendingTransactionModelSchema = CollectionSchema(
       name: r'merchantName',
       type: IsarType.string,
     ),
-    r'rawBody': PropertySchema(
+    r'notificationId': PropertySchema(
       id: 2,
+      name: r'notificationId',
+      type: IsarType.long,
+    ),
+    r'rawBody': PropertySchema(
+      id: 3,
       name: r'rawBody',
       type: IsarType.string,
     ),
     r'timestamp': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'timestamp',
       type: IsarType.dateTime,
     )
@@ -72,8 +77,9 @@ void _pendingTransactionModelSerialize(
 ) {
   writer.writeDouble(offsets[0], object.amount);
   writer.writeString(offsets[1], object.merchantName);
-  writer.writeString(offsets[2], object.rawBody);
-  writer.writeDateTime(offsets[3], object.timestamp);
+  writer.writeLong(offsets[2], object.notificationId);
+  writer.writeString(offsets[3], object.rawBody);
+  writer.writeDateTime(offsets[4], object.timestamp);
 }
 
 PendingTransactionModel _pendingTransactionModelDeserialize(
@@ -86,8 +92,9 @@ PendingTransactionModel _pendingTransactionModelDeserialize(
   object.amount = reader.readDouble(offsets[0]);
   object.id = id;
   object.merchantName = reader.readString(offsets[1]);
-  object.rawBody = reader.readString(offsets[2]);
-  object.timestamp = reader.readDateTime(offsets[3]);
+  object.notificationId = reader.readLong(offsets[2]);
+  object.rawBody = reader.readString(offsets[3]);
+  object.timestamp = reader.readDateTime(offsets[4]);
   return object;
 }
 
@@ -103,8 +110,10 @@ P _pendingTransactionModelDeserializeProp<P>(
     case 1:
       return (reader.readString(offset)) as P;
     case 2:
-      return (reader.readString(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 3:
+      return (reader.readString(offset)) as P;
+    case 4:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -469,6 +478,62 @@ extension PendingTransactionModelQueryFilter on QueryBuilder<
   }
 
   QueryBuilder<PendingTransactionModel, PendingTransactionModel,
+      QAfterFilterCondition> notificationIdEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'notificationId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<PendingTransactionModel, PendingTransactionModel,
+      QAfterFilterCondition> notificationIdGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'notificationId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<PendingTransactionModel, PendingTransactionModel,
+      QAfterFilterCondition> notificationIdLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'notificationId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<PendingTransactionModel, PendingTransactionModel,
+      QAfterFilterCondition> notificationIdBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'notificationId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<PendingTransactionModel, PendingTransactionModel,
       QAfterFilterCondition> rawBodyEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -700,6 +765,20 @@ extension PendingTransactionModelQuerySortBy
   }
 
   QueryBuilder<PendingTransactionModel, PendingTransactionModel, QAfterSortBy>
+      sortByNotificationId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<PendingTransactionModel, PendingTransactionModel, QAfterSortBy>
+      sortByNotificationIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<PendingTransactionModel, PendingTransactionModel, QAfterSortBy>
       sortByRawBody() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'rawBody', Sort.asc);
@@ -773,6 +852,20 @@ extension PendingTransactionModelQuerySortThenBy on QueryBuilder<
   }
 
   QueryBuilder<PendingTransactionModel, PendingTransactionModel, QAfterSortBy>
+      thenByNotificationId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<PendingTransactionModel, PendingTransactionModel, QAfterSortBy>
+      thenByNotificationIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'notificationId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<PendingTransactionModel, PendingTransactionModel, QAfterSortBy>
       thenByRawBody() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'rawBody', Sort.asc);
@@ -818,6 +911,13 @@ extension PendingTransactionModelQueryWhereDistinct on QueryBuilder<
   }
 
   QueryBuilder<PendingTransactionModel, PendingTransactionModel, QDistinct>
+      distinctByNotificationId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'notificationId');
+    });
+  }
+
+  QueryBuilder<PendingTransactionModel, PendingTransactionModel, QDistinct>
       distinctByRawBody({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'rawBody', caseSensitive: caseSensitive);
@@ -851,6 +951,13 @@ extension PendingTransactionModelQueryProperty on QueryBuilder<
       merchantNameProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'merchantName');
+    });
+  }
+
+  QueryBuilder<PendingTransactionModel, int, QQueryOperations>
+      notificationIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'notificationId');
     });
   }
 

@@ -5,6 +5,7 @@ import '../models/category_model.dart';
 import '../models/transaction_model.dart';
 import '../models/inflow_model.dart';
 import '../models/pending_transaction_model.dart';
+import '../models/piggy_bank_model.dart';
 
 class StorageProvider {
   late Isar isar;
@@ -12,7 +13,7 @@ class StorageProvider {
   Future<void> init() async {
     final dir = await getApplicationDocumentsDirectory();
     isar = await Isar.open(
-      [BudgetModelSchema, CategoryModelSchema, TransactionModelSchema, InflowModelSchema, PendingTransactionModelSchema],
+      [BudgetModelSchema, CategoryModelSchema, TransactionModelSchema, InflowModelSchema, PendingTransactionModelSchema, PiggyBankEntryModelSchema],
       directory: dir.path,
     );
   }

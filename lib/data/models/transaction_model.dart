@@ -12,4 +12,5 @@ class TransactionModel {
   double amount = 0;
   DateTime date = DateTime.now();
   String description = '';
+  String attachmentPath = ''; // absolute path in app documents dir; empty = no attachment
 }

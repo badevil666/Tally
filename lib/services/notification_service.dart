@@ -1,17 +1,83 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tz_data;
 import '../data/models/budget_model.dart';
 import '../data/models/category_model.dart';
 import '../data/models/transaction_model.dart';
 import '../data/models/inflow_model.dart';
 import '../data/models/pending_transaction_model.dart';
+import '../data/models/piggy_bank_model.dart';
 
-/// Top-level handler for notification action taps when the app is in the background.
-/// Runs in a separate isolate — cannot access static state from NotificationService.
-/// Writes directly to Isar; BudgetProvider reloads when the app resumes.
+// ── Shared helper — works in any isolate ────────────────────────────────────
+Future<void> categorizeViaIsar(int ptId, int categoryId) async {
+  print('[Notif] _categorizeViaIsar ptId=$ptId categoryId=$categoryId');
+  final dir = await getApplicationDocumentsDirectory();
+  final isar = Isar.getInstance() ?? await Isar.open(
+    [BudgetModelSchema, CategoryModelSchema, TransactionModelSchema,
+     InflowModelSchema, PendingTransactionModelSchema, PiggyBankEntryModelSchema],
+    directory: dir.path,
+  );
+  print('[Notif] isar opened');
+
+  final pt = await isar.pendingTransactionModels.get(ptId);
+  print('[Notif] pt=$pt');
+  if (pt == null) { print('[Notif] pt not found, aborting'); return; }
+
+  final cat = await isar.categoryModels.get(categoryId)
+      ?? await isar.categoryModels
+          .filter()
+          .isProtectedEqualTo(true)
+          .typeEqualTo(CategoryType.variable)
+          .findFirst();
+  print('[Notif] cat=$cat');
+  if (cat == null) { print('[Notif] cat not found, aborting'); return; }
+
+  final tx = TransactionModel()
+    ..amount = pt.amount
+    ..description = pt.merchantName.isEmpty ? 'SMS Transaction' : pt.merchantName
+    ..date = DateTime.now();
+  tx.category.value = cat;
+
+  await isar.writeTxn(() async {
+    await isar.transactionModels.put(tx);
+    await tx.category.save();
+    await isar.pendingTransactionModels.delete(ptId);
+  });
+
+  // Cancel original notification + show confirmation
+  final plugin = FlutterLocalNotificationsPlugin();
+  await plugin.initialize(
+    settings: const InitializationSettings(
+      android: AndroidInitializationSettings('ic_launcher'),
+    ),
+  );
+  if (pt.notificationId > 0 && pt.notificationId <= 2147483647) {
+    await plugin.cancel(id: pt.notificationId);
+  }
+  final amtStr = pt.amount == pt.amount.truncateToDouble()
+      ? '₹${pt.amount.toStringAsFixed(0)}'
+      : '₹${pt.amount.toStringAsFixed(2)}';
+  await plugin.show(
+    id: ptId,
+    title: 'Added to ${cat.name}',
+    body: '$amtStr · ${pt.merchantName}',
+    notificationDetails: const NotificationDetails(
+      android: AndroidNotificationDetails(
+        'transaction_alerts', 'Transaction Alerts',
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+        autoCancel: true,
+      ),
+    ),
+  );
+}
+
+/// Background isolate handler
 @pragma('vm:entry-point')
 void _backgroundNotificationHandler(NotificationResponse response) async {
+  print('[Notif] background handler fired actionId=${response.actionId} payload=${response.payload}');
   final payload = response.payload;
   final actionId = response.actionId;
   if (payload == null || actionId == null || !actionId.startsWith('cat_')) return;
@@ -20,55 +86,30 @@ void _backgroundNotificationHandler(NotificationResponse response) async {
   final categoryId = int.tryParse(actionId.replaceFirst('cat_', ''));
   if (ptId == null || categoryId == null) return;
 
-  final dir = await getApplicationDocumentsDirectory();
-  final isar = Isar.getInstance() ?? await Isar.open(
-    [BudgetModelSchema, CategoryModelSchema, TransactionModelSchema,
-     InflowModelSchema, PendingTransactionModelSchema],
-    directory: dir.path,
-  );
-
-  final pt = await isar.pendingTransactionModels.get(ptId);
-  final cat = await isar.categoryModels.get(categoryId);
-  if (pt == null || cat == null) return;
-
-  final tx = TransactionModel()
-    ..amount = pt.amount
-    ..description = pt.merchantName.isEmpty ? 'SMS Transaction' : pt.merchantName
-    ..date = pt.timestamp;
-  tx.category.value = cat;
-
-  await isar.writeTxn(() async {
-    await isar.transactionModels.put(tx);
-    await tx.category.save();
-    await isar.pendingTransactionModels.delete(ptId);
-  });
+  await categorizeViaIsar(ptId, categoryId);
 }
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  /// Set from main() after BudgetProvider is created.
-  /// Used when the app is in the foreground — routes through BudgetProvider
-  /// so the UI updates immediately.
-  static Future<void> Function(int ptId, int categoryId)? onCategorize;
+  static void initializeTimezones() {
+    tz_data.initializeTimeZones();
+  }
 
-  /// Set from main(). Called when the user taps the notification body.
-  /// Should navigate to Inbox and highlight the pending entry.
+  /// Called after categorization so the UI updates immediately (optional).
+  static Future<void> Function(int ptId, int categoryId)? onCategorizeDone;
+
+  /// Called when the user taps the notification body (not an action button).
   static void Function(int ptId)? onNotificationTap;
 
-  /// Set from main(). Called after app resumes from background so
-  /// BudgetProvider can reload pending transactions categorized via
-  /// the background notification handler.
-  static Future<void> Function()? onResume;
-
-  /// Registers response callbacks only. Safe to call before runApp — no dialogs.
   static Future<void> initCallbacksOnly() async {
     await _notificationsPlugin.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        android: AndroidInitializationSettings('ic_launcher'),
       ),
       onDidReceiveNotificationResponse: (NotificationResponse response) async {
+        print('[Notif] foreground handler fired actionId=${response.actionId} payload=${response.payload}');
         final payload = response.payload;
         if (payload == null) return;
         final ptId = int.tryParse(payload);
@@ -77,7 +118,11 @@ class NotificationService {
         final actionId = response.actionId;
         if (actionId != null && actionId.startsWith('cat_')) {
           final categoryId = int.tryParse(actionId.replaceFirst('cat_', ''));
-          if (categoryId != null) await onCategorize?.call(ptId, categoryId);
+          if (categoryId == null) return;
+          // Write directly to Isar — reliable regardless of provider state
+          await categorizeViaIsar(ptId, categoryId);
+          // Tell provider to refresh if it's running
+          await onCategorizeDone?.call(ptId, categoryId);
         } else {
           onNotificationTap?.call(ptId);
         }
@@ -86,7 +131,6 @@ class NotificationService {
     );
   }
 
-  /// Requests notification permission. Must be called after runApp so the dialog renders.
   static Future<void> requestPermissions() async {
     await _notificationsPlugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
@@ -101,7 +145,12 @@ class NotificationService {
     required List<({int id, String name})> categories,
   }) async {
     final actions = categories.take(3).map((cat) =>
-      AndroidNotificationAction('cat_${cat.id}', cat.name),
+      AndroidNotificationAction(
+        'cat_${cat.id}',
+        cat.name,
+        showsUserInterface: true,
+        cancelNotification: true,
+      ),
     ).toList();
 
     final androidDetails = AndroidNotificationDetails(
@@ -109,6 +158,7 @@ class NotificationService {
       'Transaction Alerts',
       importance: Importance.max,
       priority: Priority.high,
+      autoCancel: false,
       actions: actions,
     );
 
@@ -121,23 +171,64 @@ class NotificationService {
     );
   }
 
+  static const int _eveningReminderId = 9001;
+
+  static Future<void> scheduleEveningReminder({
+    required double surplus,
+    required String currency,
+  }) async {
+    await _notificationsPlugin.cancel(id: _eveningReminderId);
+    if (surplus <= 0) return;
+
+    final now = DateTime.now();
+    final eightPmTonight = DateTime(now.year, now.month, now.day, 20, 0);
+    if (!eightPmTonight.isAfter(now)) return;
+
+    final eightPmUtc = eightPmTonight.toUtc();
+    final scheduledDate = tz.TZDateTime.from(eightPmUtc, tz.UTC);
+
+    const androidDetails = AndroidNotificationDetails(
+      'evening_reminder',
+      'Evening Reminders',
+      channelDescription: 'Nightly surplus banking reminder',
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
+    );
+
+    await _notificationsPlugin.zonedSchedule(
+      id: _eveningReminderId,
+      title: '🐷 Piggy is waiting!',
+      body: 'You have $currency${surplus.toStringAsFixed(0)} left today — bank it before midnight!',
+      scheduledDate: scheduledDate,
+      notificationDetails: const NotificationDetails(android: androidDetails),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+    );
+  }
+
+  static Future<NotificationAppLaunchDetails?> getLaunchDetails() async {
+    return await _notificationsPlugin.getNotificationAppLaunchDetails();
+  }
+
+  static Future<void> cancel(int id) async {
+    await _notificationsPlugin.cancel(id: id);
+  }
+
   static Future<void> showBudgetAlert({
     required int id,
     required String title,
     required String body,
   }) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'budget_alerts',
-      'Budget Alerts',
-      importance: Importance.max,
-      priority: Priority.high,
-    );
-
     await _notificationsPlugin.show(
       id: id,
       title: title,
       body: body,
-      notificationDetails: const NotificationDetails(android: androidDetails),
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'budget_alerts', 'Budget Alerts',
+          importance: Importance.max,
+          priority: Priority.high,
+        ),
+      ),
     );
   }
 }
