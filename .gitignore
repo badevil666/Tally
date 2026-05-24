@@ -7,6 +7,9 @@
 .buildlog/
 .history
 
+# Android bug reports (logs from device — may contain PII)
+bugreport-*.zip
+
 
 
 # Flutter repo-specific

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../data/models/category_model.dart';
 import '../../logic/providers/budget_provider.dart';
 import '../../core/theme/app_theme.dart';
-import 'package:uuid/uuid.dart';
 
 class AllocationScreen extends StatelessWidget {
   const AllocationScreen({super.key});
@@ -27,7 +27,7 @@ class AllocationScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(24),
                 margin: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppTheme.surface,
+                  color: AppTheme.cardSurface,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -38,7 +38,7 @@ class AllocationScreen extends StatelessWidget {
                       children: [
                         Text('Unallocated', style: Theme.of(context).textTheme.bodyMedium),
                         const SizedBox(height: 4),
-                        Text('\$${provider.unallocated.toStringAsFixed(2)}', 
+                        Text('\$${provider.unallocated.toStringAsFixed(2)}',
                           style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 24)),
                       ],
                     ),
@@ -47,7 +47,7 @@ class AllocationScreen extends StatelessWidget {
                       children: [
                         Text('Total Limit', style: Theme.of(context).textTheme.bodyMedium),
                         const SizedBox(height: 4),
-                        Text('\$${provider.totalAllocated.toStringAsFixed(2)}', 
+                        Text('\$${provider.totalAllocated.toStringAsFixed(2)}',
                           style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 24, color: AppTheme.accent)),
                       ],
                     ),
@@ -55,27 +55,28 @@ class AllocationScreen extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: provider.categories.isEmpty 
+                child: provider.categories.isEmpty
                   ? Center(child: Text('Add categories to allocate your budget.', style: Theme.of(context).textTheme.bodyMedium))
                   : ListView.builder(
-                  itemCount: provider.categories.length,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemBuilder: (context, index) {
-                    final cat = provider.categories[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('Spent: \$${cat.spent} / Limit: \$${cat.limit}'),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.edit, color: AppTheme.accent),
-                          onPressed: () => _showEditCategoryDialog(context, cat.id, cat.name, cat.limit),
+                    itemCount: provider.categories.length,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemBuilder: (context, index) {
+                      final cat = provider.categories[index];
+                      final spent = provider.spentInCategory(cat.id);
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text('Spent: \$${spent.toStringAsFixed(2)} / Limit: \$${cat.limit.toStringAsFixed(2)}'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.edit, color: AppTheme.accent),
+                            onPressed: () => _showEditCategoryDialog(context, cat.id, cat.name, cat.limit),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      ),
-                    );
-                  },
-                ),
+                      );
+                    },
+                  ),
               ),
             ],
           );
@@ -87,42 +88,55 @@ class AllocationScreen extends StatelessWidget {
   void _showAddCategoryDialog(BuildContext context) {
     final nameCtrl = TextEditingController();
     final limitCtrl = TextEditingController();
+    CategoryType selectedType = CategoryType.variable;
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surface,
-        title: const Text('Add Category'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Category Name', filled: true)),
-            const SizedBox(height: 12),
-            TextField(controller: limitCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Limit (\$)', filled: true)),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: AppTheme.cardSurface,
+          title: const Text('Add Category'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Category Name', filled: true)),
+              const SizedBox(height: 12),
+              TextField(controller: limitCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Limit (\$)', filled: true)),
+              const SizedBox(height: 12),
+              DropdownButton<CategoryType>(
+                value: selectedType,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: CategoryType.variable, child: Text('Variable')),
+                  DropdownMenuItem(value: CategoryType.fixed, child: Text('Fixed')),
+                ],
+                onChanged: (v) => setState(() => selectedType = v ?? CategoryType.variable),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                if (nameCtrl.text.isNotEmpty && limitCtrl.text.isNotEmpty) {
+                  context.read<BudgetProvider>().addCategory(nameCtrl.text, double.parse(limitCtrl.text), selectedType);
+                  Navigator.pop(context);
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accent, foregroundColor: Colors.black),
+              child: const Text('Add'),
+            )
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              if (nameCtrl.text.isNotEmpty && limitCtrl.text.isNotEmpty) {
-                context.read<BudgetProvider>().addCategory(nameCtrl.text, double.parse(limitCtrl.text));
-                Navigator.pop(context);
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accent, foregroundColor: Colors.black),
-            child: const Text('Add'),
-          )
-        ],
-      )
+      ),
     );
   }
 
-  void _showEditCategoryDialog(BuildContext context, String id, String name, double currentLimit) {
-    final limitCtrl = TextEditingController(text: currentLimit.toString());
+  void _showEditCategoryDialog(BuildContext context, int id, String name, double currentLimit) {
+    final limitCtrl = TextEditingController(text: currentLimit.toStringAsFixed(2));
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surface,
+        backgroundColor: AppTheme.cardSurface,
         title: Text('Edit Limit - $name'),
         content: TextField(controller: limitCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'New Limit (\$)', filled: true)),
         actions: [
@@ -138,7 +152,7 @@ class AllocationScreen extends StatelessWidget {
             child: const Text('Save'),
           )
         ],
-      )
+      ),
     );
   }
 }
