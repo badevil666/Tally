@@ -1,5 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:isar/isar.dart';
+import 'package:isar_community/isar.dart';
 import '../data/models/category_model.dart';
 import '../data/providers/storage_provider.dart';
 

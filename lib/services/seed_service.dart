@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'package:isar/isar.dart';
+import 'package:isar_community/isar.dart';
 import '../data/models/transaction_model.dart';
 import '../data/models/piggy_bank_model.dart';
 import '../data/models/inflow_model.dart';

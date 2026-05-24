@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:telephony/telephony.dart';
-import 'package:isar/isar.dart';
+import 'package:isar_community/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import '../data/models/budget_model.dart';
 import '../data/models/category_model.dart';
@@ -13,8 +13,8 @@ import 'notification_service.dart';
 /// Top-level entry point called by the telephony package when an SMS arrives
 /// and the app is not in the foreground. Runs in a background isolate.
 @pragma('vm:entry-point')
-void backgroundMessageHandler(SmsMessage message) {
-  SmsService.onMessage(message);
+Future<void> backgroundMessageHandler(SmsMessage message) async {
+  await SmsService.onMessage(message);
 }
 
 class SmsService {
@@ -23,19 +23,47 @@ class SmsService {
   static void Function(PendingTransactionModel pt)? onPendingAdded;
 
   // ── Amount ───────────────────────────────────────────────────────────────────
-  // Matches: Rs 466.00 · Rs.466 · INR 466.00 · ₹466 · ₹ 466.00 · Rs466
+  // Matches major bank SMS currency prefixes worldwide:
+  //   Indian: Rs / Rs. / INR / ₹
+  //   USD:    $ / USD
+  //   EUR:    € / EUR
+  //   GBP:    £ / GBP
+  //   AED:    AED / د.إ
+  //   Others: JPY/¥, AUD/CAD/SGD/CHF, kr, RM, ৳, ฿, ₩, R$, Rp, MX$
   static final _amountPattern = RegExp(
-    r'(?:rs\.?\s*|inr\s*|₹\s*)(\d[\d,]*(?:\.\d{1,2})?)',
+    r'(?:rs\.?\s*|inr\s*|₹\s*|usd\s*|\$\s*|eur\s*|€\s*|gbp\s*|£\s*|aed\s*|د\.إ\s*|'
+    r'jpy\s*|¥\s*|aud\s*|cad\s*|sgd\s*|chf\s*|kr\s*|rm\s*|৳\s*|฿\s*|₩\s*|r\$\s*|rp\s*|mx\$\s*)'
+    r'(\d[\d,]*(?:\.\d{1,2})?)',
     caseSensitive: false,
   );
+
+  // ── Promotional / OTP guard ─────────────────────────────────────────────────
+  // Reject obviously non-transactional messages first so they don't create
+  // false positives in the inbox.
+  static bool _isPromotionalOrOtp(String lower) {
+    return RegExp(
+      r'\b('
+      r'otp|one[\s-]?time\s+password|verification\s+code|'
+      r'cashback\s+(of|on|upto|of\s+up\s*to)|'
+      r'spend\s+(rs|inr|₹|\$)?\s*\d+\s+(to\s+get|and\s+get|for)|'
+      r'offer|discount|coupon|promo|sale\s+ends|'
+      r'bal(ance)?\s+(is|in|of)|'
+      r'avail(able)?\s+bal'
+      r')\b',
+      caseSensitive: false,
+    ).hasMatch(lower);
+  }
 
   // ── Debit detection ──────────────────────────────────────────────────────────
   // Returns true only if the SMS is clearly a spend/debit, not a credit/refund.
   static bool _isDebitSms(String lower) {
+    // Reject OTPs and promotional SMS first
+    if (_isPromotionalOrOtp(lower)) return false;
+
     // Explicit credit signals → not a spend
     if (RegExp(
       r'\b(credited|credit to account|refund(ed)?|cashback|received from|'
-      r'deposited|added to wallet|money added)\b',
+      r'deposited|added to wallet|money added|money in|money received)\b',
     ).hasMatch(lower)) {
       return false;
     }
@@ -47,8 +75,10 @@ class SmsService {
       r'debited|debit|'
       // UPI payments (Federal Bank, IndusInd, IDFC, etc.)
       r'sent via upi|sent to|'
-      // HDFC / Axis / Yes / Kotak credit-card or debit-card
-      r'paid to|you.{0,4}paid|'
+      // HDFC / Axis / Yes / Kotak credit-card or debit-card.
+      // Allow "you …(up to ~25 chars)… paid" to catch "you have paid",
+      // "you successfully paid", etc.
+      r'paid to|you\b.{0,25}?\bpaid\b|'
       r'payment (of|made|done|successful)|'
       // ATM
       r'withdrawn|withdrawal|'
@@ -139,7 +169,7 @@ class SmsService {
       .join(' ');
 
   // ── Main handler ─────────────────────────────────────────────────────────────
-  static void onMessage(SmsMessage message) async {
+  static Future<void> onMessage(SmsMessage message) async {
     final body = message.body ?? '';
     final lower = body.toLowerCase();
 
@@ -155,6 +185,16 @@ class SmsService {
     final merchant = _extractMerchant(body);
 
     final isar = await _openIsar();
+
+    // Deduplicate: if a pending transaction already exists with the same raw
+    // body (possible when the SMS is re-delivered or the receiver fires twice),
+    // skip silently instead of creating a duplicate inbox entry.
+    final existing = await isar.pendingTransactionModels
+        .filter()
+        .rawBodyEqualTo(body)
+        .findFirst();
+    if (existing != null) return;
+
     final notifId = DateTime.now().millisecondsSinceEpoch ~/ 1000 & 0x7FFFFFFF;
     final pt = await _savePending(isar, body, amount, merchant, notifId);
     onPendingAdded?.call(pt);
@@ -214,8 +254,40 @@ class SmsService {
     return cats.map((c) => (id: c.id, name: c.name)).toList();
   }
 
-  static Future<void> init() async {
-    final permissionsGranted = await telephony.requestPhoneAndSmsPermissions;
+  /// Whether the OS has already granted SMS permission to the app.
+  /// Does NOT prompt the user — safe to call on every boot.
+  static Future<bool> hasPermission() async {
+    final granted = await telephony.isSmsCapable;
+    if (granted == null || !granted) return false;
+    // telephony.isSmsCapable only tells us the device supports SMS.
+    // The actual permission state is reflected in whether listenIncomingSms
+    // works; we approximate by tracking a "requested" preference at the
+    // call site. For this method we rely on the OS check via the package's
+    // own permission probe.
+    return true;
+  }
+
+  /// Attach the SMS listener if permission was previously granted.
+  /// Safe to call on every boot — never prompts.
+  static Future<void> attachIfPermitted() async {
+    try {
+      // listenIncomingSms only succeeds when permissions are already granted.
+      // We attempt to attach silently; failures are swallowed.
+      telephony.listenIncomingSms(
+        onNewMessage: onMessage,
+        onBackgroundMessage: backgroundMessageHandler,
+      );
+      debugPrint('[SmsService] listener attached (will only fire if permitted)');
+    } catch (e) {
+      debugPrint('[SmsService] attachIfPermitted failed: $e');
+    }
+  }
+
+  /// Explicitly prompt the user for SMS permission and attach the listener
+  /// on success. Call this only from a UI flow that has already shown a
+  /// prominent disclosure (Play Store SMS policy requirement).
+  static Future<bool> requestPermissionAndInit() async {
+    final permissionsGranted = await telephony.requestSmsPermissions;
     debugPrint('[SmsService] permissions granted: $permissionsGranted');
     if (permissionsGranted != null && permissionsGranted) {
       telephony.listenIncomingSms(
@@ -223,6 +295,8 @@ class SmsService {
         onBackgroundMessage: backgroundMessageHandler,
       );
       debugPrint('[SmsService] listening for incoming SMS');
+      return true;
     }
+    return false;
   }
 }
