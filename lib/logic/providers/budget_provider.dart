@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:isar/isar.dart';
+import 'package:isar_community/isar.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,6 +18,7 @@ import '../../services/notification_service.dart';
 
 class BudgetProvider extends ChangeNotifier {
   final StorageProvider _storage;
+  bool _disposed = false;
 
   BudgetModel? _budget;
   List<CategoryModel> _categories = [];
@@ -30,8 +31,29 @@ class BudgetProvider extends ChangeNotifier {
   DateTime _selectedMonth = DateTime.now();
   String _searchQuery = '';
 
+  /// Resolves once the initial Isar load finishes (budget, categories,
+  /// transactions, inflows, pending tx, piggy). Used by the bootstrap so
+  /// the native splash stays up until real data is available — no flash
+  /// of an empty Onboarding screen for users who already have a budget.
+  late final Future<void> initialLoad;
+
   BudgetProvider(this._storage) {
-    _loadData();
+    initialLoad = _loadData();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  /// Notify safely — drops the call if the provider has been disposed.
+  /// Avoids "A ChangeNotifier was used after being disposed" crashes from
+  /// late-arriving async results (background SMS, lifecycle resume, etc.).
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
   }
 
   Isar get isar => _storage.isar;
@@ -103,6 +125,15 @@ class BudgetProvider extends ChangeNotifier {
   double get totalExtraInflow => _inflows.fold(0.0, (sum, i) => sum + i.amount);
   double get totalMonthlyPool => totalIncome + totalExtraInflow;
 
+  // Total income for the current calendar month (base income + extra inflows this month)
+  double get currentMonthTotalIncome {
+    final now = DateTime.now();
+    final thisMonthInflows = _inflows
+        .where((i) => i.date.year == now.year && i.date.month == now.month)
+        .fold(0.0, (s, i) => s + i.amount);
+    return totalIncome + thisMonthInflows;
+  }
+
   double get totalExpenses => _transactions.fold(0.0, (sum, tx) => sum + tx.amount);
 
   int get daysLeftInMonth {
@@ -156,17 +187,60 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Wipes ALL data from Isar and SharedPreferences, then resets in-memory state.
+  /// After this, `budget` is null and the app will show OnboardingScreen.
+  Future<void> hardReset() async {
+    final isar = _storage.isar;
+    await isar.writeTxn(() async {
+      await isar.budgetModels.clear();
+      await isar.categoryModels.clear();
+      await isar.transactionModels.clear();
+      await isar.inflowModels.clear();
+      await isar.pendingTransactionModels.clear();
+      await isar.piggyBankEntryModels.clear();
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    _budget = null;
+    _categories = [];
+    _transactions = [];
+    _inflows = [];
+    _pendingTransactions = [];
+    _piggyEntries = [];
+    notifyListeners();
+  }
+
+  /// Loads only what's needed to pick the FIRST screen (budget +
+  /// categories). Everything else (transactions, inflows, pending,
+  /// piggy, auto-actions) streams in afterwards via [_loadRest] without
+  /// blocking the splash.
   Future<void> _loadData() async {
     final isar = _storage.isar;
     _budget = await isar.budgetModels.where().findFirst();
     _categories = await CategoryBootstrap.initialize(_storage);
-    _transactions = await isar.transactionModels.where().sortByDateDesc().findAll();
+    notifyListeners();
+    // Fire-and-forget the rest — UI is already paintable.
+    _loadRest();
+  }
+
+  Future<void> _loadRest() async {
+    final isar = _storage.isar;
+    final results = await Future.wait([
+      isar.transactionModels.where().sortByDateDesc().findAll(),
+      isar.inflowModels.where().sortByDateDesc().findAll(),
+      isar.pendingTransactionModels.where().sortByTimestampDesc().findAll(),
+      isar.piggyBankEntryModels.where().sortByDateDesc().findAll(),
+    ]);
+    _transactions = results[0] as List<TransactionModel>;
+    _inflows = results[1] as List<InflowModel>;
+    _pendingTransactions = results[2] as List<PendingTransactionModel>;
+    _piggyEntries = results[3] as List<PiggyBankEntryModel>;
     _loadTransactionLinks();
-    _inflows = await isar.inflowModels.where().sortByDateDesc().findAll();
-    _pendingTransactions = await isar.pendingTransactionModels.where().sortByTimestampDesc().findAll();
-    _piggyEntries = await isar.piggyBankEntryModels.where().sortByDateDesc().findAll();
+    // Catch up on overspend that happened while the app was closed.
+    await _autoDeductOverspendFromPiggy();
     notifyListeners();
     _refreshEveningReminder();
+    // applyEndOfDayAutoActions can write to piggy + prefs; non-blocking.
     await applyEndOfDayAutoActions();
   }
 
@@ -204,9 +278,10 @@ class BudgetProvider extends ChangeNotifier {
 
   Future<void> addCategory(String name, double limit, CategoryType type,
       {String icon = 'payments', String colorHex = '#E2E2E2'}) async {
+    if (limit < 0 || name.trim().isEmpty) return;
     final isar = _storage.isar;
     final cat = CategoryModel()
-      ..name = name
+      ..name = name.trim()
       ..limit = limit
       ..type = type
       ..icon = icon
@@ -221,6 +296,7 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   Future<void> updateCategoryLimit(Id id, double newLimit) async {
+    if (newLimit < 0) return;
     final isar = _storage.isar;
     final cat = _categories.firstWhere((c) => c.id == id);
     cat.limit = newLimit;
@@ -232,12 +308,13 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   Future<void> updateCategory(Id id, {double? limit, String? icon, String? colorHex, String? name}) async {
+    if (limit != null && limit < 0) return;
     final isar = _storage.isar;
     final cat = _categories.firstWhere((c) => c.id == id);
     if (limit != null) cat.limit = limit;
     if (icon != null) cat.icon = icon;
     if (colorHex != null) cat.colorHex = colorHex;
-    if (name != null && name.isNotEmpty) cat.name = name;
+    if (name != null && name.trim().isNotEmpty) cat.name = name.trim();
 
     await isar.writeTxn(() async {
       await isar.categoryModels.put(cat);
@@ -272,6 +349,7 @@ class BudgetProvider extends ChangeNotifier {
 
   Future<void> addTransaction(Id categoryId, double amount, String description,
       {String? attachmentSourcePath}) async {
+    if (amount <= 0) return;
     final isar = _storage.isar;
     // Fall back to the protected "Other (variable)" category if the requested
     // category can't be found (e.g. it was deleted after the notification fired).
@@ -319,7 +397,8 @@ class BudgetProvider extends ChangeNotifier {
     return dest;
   }
 
-  Future<void> updateTransaction(Id id, double amount, Id categoryId) async {
+  Future<void> updateTransaction(Id id, double amount, Id categoryId, {String? newAttachmentSourcePath, bool clearAttachment = false}) async {
+    if (amount <= 0) return;
     final isar = _storage.isar;
     final tx = _transactions.firstWhere((t) => t.id == id);
     final cat = await isar.categoryModels.get(categoryId);
@@ -327,6 +406,20 @@ class BudgetProvider extends ChangeNotifier {
 
     tx.amount = amount;
     tx.category.value = cat;
+
+    if (clearAttachment) {
+      if (tx.attachmentPath.isNotEmpty) {
+        final f = File(tx.attachmentPath);
+        if (f.existsSync()) f.deleteSync();
+      }
+      tx.attachmentPath = '';
+    } else if (newAttachmentSourcePath != null && newAttachmentSourcePath.isNotEmpty) {
+      if (tx.attachmentPath.isNotEmpty) {
+        final f = File(tx.attachmentPath);
+        if (f.existsSync()) f.deleteSync();
+      }
+      tx.attachmentPath = await _copyAttachment(newAttachmentSourcePath);
+    }
 
     await isar.writeTxn(() async {
       await isar.transactionModels.put(tx);
@@ -345,6 +438,7 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   Future<void> addInflow(double amount, String title, String sourceCategory) async {
+    if (amount <= 0) return;
     final isar = _storage.isar;
     final inflow = InflowModel()
       ..title = title
