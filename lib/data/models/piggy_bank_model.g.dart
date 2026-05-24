@@ -18,22 +18,11 @@ const PiggyBankEntryModelSchema = CollectionSchema(
   name: r'PiggyBankEntryModel',
   id: 4233891394772277326,
   properties: {
-    r'amount': PropertySchema(
-      id: 0,
-      name: r'amount',
-      type: IsarType.double,
-    ),
-    r'date': PropertySchema(
-      id: 1,
-      name: r'date',
-      type: IsarType.dateTime,
-    ),
-    r'note': PropertySchema(
-      id: 2,
-      name: r'note',
-      type: IsarType.string,
-    )
+    r'amount': PropertySchema(id: 0, name: r'amount', type: IsarType.double),
+    r'date': PropertySchema(id: 1, name: r'date', type: IsarType.dateTime),
+    r'note': PropertySchema(id: 2, name: r'note', type: IsarType.string),
   },
+
   estimateSize: _piggyBankEntryModelEstimateSize,
   serialize: _piggyBankEntryModelSerialize,
   deserialize: _piggyBankEntryModelDeserialize,
@@ -42,10 +31,11 @@ const PiggyBankEntryModelSchema = CollectionSchema(
   indexes: {},
   links: {},
   embeddedSchemas: {},
+
   getId: _piggyBankEntryModelGetId,
   getLinks: _piggyBankEntryModelGetLinks,
   attach: _piggyBankEntryModelAttach,
-  version: '3.1.0+1',
+  version: '3.3.2',
 );
 
 int _piggyBankEntryModelEstimateSize(
@@ -106,12 +96,16 @@ Id _piggyBankEntryModelGetId(PiggyBankEntryModel object) {
 }
 
 List<IsarLinkBase<dynamic>> _piggyBankEntryModelGetLinks(
-    PiggyBankEntryModel object) {
+  PiggyBankEntryModel object,
+) {
   return [];
 }
 
 void _piggyBankEntryModelAttach(
-    IsarCollection<dynamic> col, Id id, PiggyBankEntryModel object) {
+  IsarCollection<dynamic> col,
+  Id id,
+  PiggyBankEntryModel object,
+) {
   object.id = id;
 }
 
@@ -127,17 +121,14 @@ extension PiggyBankEntryModelQueryWhereSort
 extension PiggyBankEntryModelQueryWhere
     on QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QWhereClause> {
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterWhereClause>
-      idEqualTo(Id id) {
+  idEqualTo(Id id) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IdWhereClause.between(
-        lower: id,
-        upper: id,
-      ));
+      return query.addWhereClause(IdWhereClause.between(lower: id, upper: id));
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterWhereClause>
-      idNotEqualTo(Id id) {
+  idNotEqualTo(Id id) {
     return QueryBuilder.apply(this, (query) {
       if (query.whereSort == Sort.asc) {
         return query
@@ -160,7 +151,7 @@ extension PiggyBankEntryModelQueryWhere
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterWhereClause>
-      idGreaterThan(Id id, {bool include = false}) {
+  idGreaterThan(Id id, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         IdWhereClause.greaterThan(lower: id, includeLower: include),
@@ -169,7 +160,7 @@ extension PiggyBankEntryModelQueryWhere
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterWhereClause>
-      idLessThan(Id id, {bool include = false}) {
+  idLessThan(Id id, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         IdWhereClause.lessThan(upper: id, includeUpper: include),
@@ -178,73 +169,86 @@ extension PiggyBankEntryModelQueryWhere
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterWhereClause>
-      idBetween(
+  idBetween(
     Id lowerId,
     Id upperId, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IdWhereClause.between(
-        lower: lowerId,
-        includeLower: includeLower,
-        upper: upperId,
-        includeUpper: includeUpper,
-      ));
+      return query.addWhereClause(
+        IdWhereClause.between(
+          lower: lowerId,
+          includeLower: includeLower,
+          upper: upperId,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 }
 
-extension PiggyBankEntryModelQueryFilter on QueryBuilder<PiggyBankEntryModel,
-    PiggyBankEntryModel, QFilterCondition> {
+extension PiggyBankEntryModelQueryFilter
+    on
+        QueryBuilder<
+          PiggyBankEntryModel,
+          PiggyBankEntryModel,
+          QFilterCondition
+        > {
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      amountEqualTo(
-    double value, {
-    double epsilon = Query.epsilon,
-  }) {
+  amountEqualTo(double value, {double epsilon = Query.epsilon}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'amount',
-        value: value,
-        epsilon: epsilon,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'amount',
+          value: value,
+
+          epsilon: epsilon,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      amountGreaterThan(
-    double value, {
-    bool include = false,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'amount',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      amountLessThan(
+  amountGreaterThan(
     double value, {
     bool include = false,
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'amount',
-        value: value,
-        epsilon: epsilon,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'amount',
+          value: value,
+
+          epsilon: epsilon,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      amountBetween(
+  amountLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'amount',
+          value: value,
+
+          epsilon: epsilon,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
+  amountBetween(
     double lower,
     double upper, {
     bool includeLower = true,
@@ -252,177 +256,181 @@ extension PiggyBankEntryModelQueryFilter on QueryBuilder<PiggyBankEntryModel,
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'amount',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        epsilon: epsilon,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'amount',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+
+          epsilon: epsilon,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      dateEqualTo(DateTime value) {
+  dateEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'date',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'date', value: value),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      dateGreaterThan(
-    DateTime value, {
-    bool include = false,
-  }) {
+  dateGreaterThan(DateTime value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'date',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'date',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      dateLessThan(
-    DateTime value, {
-    bool include = false,
-  }) {
+  dateLessThan(DateTime value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'date',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'date',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      dateBetween(
+  dateBetween(
     DateTime lower,
     DateTime upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'date',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'date',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      idEqualTo(Id value) {
+  idEqualTo(Id value) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'id',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'id', value: value),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      idGreaterThan(
-    Id value, {
-    bool include = false,
-  }) {
+  idGreaterThan(Id value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'id',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'id',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      idLessThan(
-    Id value, {
-    bool include = false,
-  }) {
+  idLessThan(Id value, {bool include = false}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'id',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'id',
+          value: value,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      idBetween(
+  idBetween(
     Id lower,
     Id upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'id',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'id',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      noteEqualTo(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  noteEqualTo(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'note',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'note',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      noteGreaterThan(
-    String value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'note',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      noteLessThan(
+  noteGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'note',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'note',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      noteBetween(
+  noteLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'note',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
+  noteBetween(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -430,133 +438,145 @@ extension PiggyBankEntryModelQueryFilter on QueryBuilder<PiggyBankEntryModel,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'note',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'note',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      noteStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  noteStartsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'note',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'note',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      noteEndsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  noteEndsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'note',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'note',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      noteContains(String value, {bool caseSensitive = true}) {
+  noteContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'note',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'note',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      noteMatches(String pattern, {bool caseSensitive = true}) {
+  noteMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'note',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'note',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      noteIsEmpty() {
+  noteIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'note',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'note', value: ''),
+      );
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterFilterCondition>
-      noteIsNotEmpty() {
+  noteIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'note',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(property: r'note', value: ''),
+      );
     });
   }
 }
 
-extension PiggyBankEntryModelQueryObject on QueryBuilder<PiggyBankEntryModel,
-    PiggyBankEntryModel, QFilterCondition> {}
+extension PiggyBankEntryModelQueryObject
+    on
+        QueryBuilder<
+          PiggyBankEntryModel,
+          PiggyBankEntryModel,
+          QFilterCondition
+        > {}
 
-extension PiggyBankEntryModelQueryLinks on QueryBuilder<PiggyBankEntryModel,
-    PiggyBankEntryModel, QFilterCondition> {}
+extension PiggyBankEntryModelQueryLinks
+    on
+        QueryBuilder<
+          PiggyBankEntryModel,
+          PiggyBankEntryModel,
+          QFilterCondition
+        > {}
 
 extension PiggyBankEntryModelQuerySortBy
     on QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QSortBy> {
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      sortByAmount() {
+  sortByAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'amount', Sort.asc);
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      sortByAmountDesc() {
+  sortByAmountDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'amount', Sort.desc);
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      sortByDate() {
+  sortByDate() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'date', Sort.asc);
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      sortByDateDesc() {
+  sortByDateDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'date', Sort.desc);
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      sortByNote() {
+  sortByNote() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'note', Sort.asc);
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      sortByNoteDesc() {
+  sortByNoteDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'note', Sort.desc);
     });
@@ -566,56 +586,56 @@ extension PiggyBankEntryModelQuerySortBy
 extension PiggyBankEntryModelQuerySortThenBy
     on QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QSortThenBy> {
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      thenByAmount() {
+  thenByAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'amount', Sort.asc);
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      thenByAmountDesc() {
+  thenByAmountDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'amount', Sort.desc);
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      thenByDate() {
+  thenByDate() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'date', Sort.asc);
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      thenByDateDesc() {
+  thenByDateDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'date', Sort.desc);
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      thenById() {
+  thenById() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.asc);
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      thenByIdDesc() {
+  thenByIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.desc);
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      thenByNote() {
+  thenByNote() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'note', Sort.asc);
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QAfterSortBy>
-      thenByNoteDesc() {
+  thenByNoteDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'note', Sort.desc);
     });
@@ -625,21 +645,21 @@ extension PiggyBankEntryModelQuerySortThenBy
 extension PiggyBankEntryModelQueryWhereDistinct
     on QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QDistinct> {
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QDistinct>
-      distinctByAmount() {
+  distinctByAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'amount');
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QDistinct>
-      distinctByDate() {
+  distinctByDate() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'date');
     });
   }
 
   QueryBuilder<PiggyBankEntryModel, PiggyBankEntryModel, QDistinct>
-      distinctByNote({bool caseSensitive = true}) {
+  distinctByNote({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'note', caseSensitive: caseSensitive);
     });

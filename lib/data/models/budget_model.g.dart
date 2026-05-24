@@ -17,11 +17,7 @@ const BudgetModelSchema = CollectionSchema(
   name: r'BudgetModel',
   id: 7247118153370490723,
   properties: {
-    r'country': PropertySchema(
-      id: 0,
-      name: r'country',
-      type: IsarType.string,
-    ),
+    r'country': PropertySchema(id: 0, name: r'country', type: IsarType.string),
     r'currencySymbol': PropertySchema(
       id: 1,
       name: r'currencySymbol',
@@ -36,8 +32,9 @@ const BudgetModelSchema = CollectionSchema(
       id: 3,
       name: r'totalIncome',
       type: IsarType.double,
-    )
+    ),
   },
+
   estimateSize: _budgetModelEstimateSize,
   serialize: _budgetModelSerialize,
   deserialize: _budgetModelDeserialize,
@@ -46,10 +43,11 @@ const BudgetModelSchema = CollectionSchema(
   indexes: {},
   links: {},
   embeddedSchemas: {},
+
   getId: _budgetModelGetId,
   getLinks: _budgetModelGetLinks,
   attach: _budgetModelAttach,
-  version: '3.1.0+1',
+  version: '3.3.2',
 );
 
 int _budgetModelEstimateSize(
@@ -119,7 +117,10 @@ List<IsarLinkBase<dynamic>> _budgetModelGetLinks(BudgetModel object) {
 }
 
 void _budgetModelAttach(
-    IsarCollection<dynamic> col, Id id, BudgetModel object) {
+  IsarCollection<dynamic> col,
+  Id id,
+  BudgetModel object,
+) {
   object.id = id;
 }
 
@@ -136,15 +137,13 @@ extension BudgetModelQueryWhere
     on QueryBuilder<BudgetModel, BudgetModel, QWhereClause> {
   QueryBuilder<BudgetModel, BudgetModel, QAfterWhereClause> idEqualTo(Id id) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IdWhereClause.between(
-        lower: id,
-        upper: id,
-      ));
+      return query.addWhereClause(IdWhereClause.between(lower: id, upper: id));
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterWhereClause> idNotEqualTo(
-      Id id) {
+    Id id,
+  ) {
     return QueryBuilder.apply(this, (query) {
       if (query.whereSort == Sort.asc) {
         return query
@@ -166,8 +165,10 @@ extension BudgetModelQueryWhere
     });
   }
 
-  QueryBuilder<BudgetModel, BudgetModel, QAfterWhereClause> idGreaterThan(Id id,
-      {bool include = false}) {
+  QueryBuilder<BudgetModel, BudgetModel, QAfterWhereClause> idGreaterThan(
+    Id id, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         IdWhereClause.greaterThan(lower: id, includeLower: include),
@@ -175,8 +176,10 @@ extension BudgetModelQueryWhere
     });
   }
 
-  QueryBuilder<BudgetModel, BudgetModel, QAfterWhereClause> idLessThan(Id id,
-      {bool include = false}) {
+  QueryBuilder<BudgetModel, BudgetModel, QAfterWhereClause> idLessThan(
+    Id id, {
+    bool include = false,
+  }) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         IdWhereClause.lessThan(upper: id, includeUpper: include),
@@ -191,12 +194,14 @@ extension BudgetModelQueryWhere
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IdWhereClause.between(
-        lower: lowerId,
-        includeLower: includeLower,
-        upper: upperId,
-        includeUpper: includeUpper,
-      ));
+      return query.addWhereClause(
+        IdWhereClause.between(
+          lower: lowerId,
+          includeLower: includeLower,
+          upper: upperId,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 }
@@ -208,27 +213,31 @@ extension BudgetModelQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'country',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'country',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      countryGreaterThan(
+  countryGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'country',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'country',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
@@ -238,12 +247,14 @@ extension BudgetModelQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'country',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'country',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
@@ -255,28 +266,29 @@ extension BudgetModelQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'country',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'country',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      countryStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  countryStartsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'country',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'country',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
@@ -285,106 +297,115 @@ extension BudgetModelQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'country',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'country',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition> countryContains(
-      String value,
-      {bool caseSensitive = true}) {
+    String value, {
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'country',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'country',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition> countryMatches(
-      String pattern,
-      {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'country',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      countryIsEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'country',
-        value: '',
-      ));
-    });
-  }
-
-  QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      countryIsNotEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'country',
-        value: '',
-      ));
-    });
-  }
-
-  QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      currencySymbolEqualTo(
-    String value, {
+    String pattern, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'currencySymbol',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'country',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      currencySymbolGreaterThan(
-    String value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
+  countryIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'currencySymbol',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'country', value: ''),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      currencySymbolLessThan(
+  countryIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(property: r'country', value: ''),
+      );
+    });
+  }
+
+  QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
+  currencySymbolEqualTo(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'currencySymbol',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
+  currencySymbolGreaterThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'currencySymbol',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'currencySymbol',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      currencySymbolBetween(
+  currencySymbolLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'currencySymbol',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
+  currencySymbolBetween(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -392,94 +413,96 @@ extension BudgetModelQueryFilter
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'currencySymbol',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'currencySymbol',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      currencySymbolStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  currencySymbolStartsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'currencySymbol',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'currencySymbol',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      currencySymbolEndsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
+  currencySymbolEndsWith(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'currencySymbol',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'currencySymbol',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      currencySymbolContains(String value, {bool caseSensitive = true}) {
+  currencySymbolContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'currencySymbol',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'currencySymbol',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      currencySymbolMatches(String pattern, {bool caseSensitive = true}) {
+  currencySymbolMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'currencySymbol',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'currencySymbol',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      currencySymbolIsEmpty() {
+  currencySymbolIsEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'currencySymbol',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'currencySymbol', value: ''),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      currencySymbolIsNotEmpty() {
+  currencySymbolIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'currencySymbol',
-        value: '',
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(property: r'currencySymbol', value: ''),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition> idEqualTo(
-      Id value) {
+    Id value,
+  ) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'id',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'id', value: value),
+      );
     });
   }
 
@@ -488,11 +511,13 @@ extension BudgetModelQueryFilter
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'id',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'id',
+          value: value,
+        ),
+      );
     });
   }
 
@@ -501,11 +526,13 @@ extension BudgetModelQueryFilter
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'id',
-        value: value,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'id',
+          value: value,
+        ),
+      );
     });
   }
 
@@ -516,64 +543,72 @@ extension BudgetModelQueryFilter
     bool includeUpper = true,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'id',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'id',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      savingsGoalEqualTo(
-    double value, {
-    double epsilon = Query.epsilon,
-  }) {
+  savingsGoalEqualTo(double value, {double epsilon = Query.epsilon}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'savingsGoal',
-        value: value,
-        epsilon: epsilon,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'savingsGoal',
+          value: value,
+
+          epsilon: epsilon,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      savingsGoalGreaterThan(
-    double value, {
-    bool include = false,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'savingsGoal',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      savingsGoalLessThan(
+  savingsGoalGreaterThan(
     double value, {
     bool include = false,
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'savingsGoal',
-        value: value,
-        epsilon: epsilon,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'savingsGoal',
+          value: value,
+
+          epsilon: epsilon,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      savingsGoalBetween(
+  savingsGoalLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'savingsGoal',
+          value: value,
+
+          epsilon: epsilon,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
+  savingsGoalBetween(
     double lower,
     double upper, {
     bool includeLower = true,
@@ -581,65 +616,74 @@ extension BudgetModelQueryFilter
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'savingsGoal',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        epsilon: epsilon,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'savingsGoal',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+
+          epsilon: epsilon,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      totalIncomeEqualTo(
-    double value, {
-    double epsilon = Query.epsilon,
-  }) {
+  totalIncomeEqualTo(double value, {double epsilon = Query.epsilon}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'totalIncome',
-        value: value,
-        epsilon: epsilon,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'totalIncome',
+          value: value,
+
+          epsilon: epsilon,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      totalIncomeGreaterThan(
-    double value, {
-    bool include = false,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'totalIncome',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      totalIncomeLessThan(
+  totalIncomeGreaterThan(
     double value, {
     bool include = false,
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'totalIncome',
-        value: value,
-        epsilon: epsilon,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'totalIncome',
+          value: value,
+
+          epsilon: epsilon,
+        ),
+      );
     });
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
-      totalIncomeBetween(
+  totalIncomeLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'totalIncome',
+          value: value,
+
+          epsilon: epsilon,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<BudgetModel, BudgetModel, QAfterFilterCondition>
+  totalIncomeBetween(
     double lower,
     double upper, {
     bool includeLower = true,
@@ -647,14 +691,17 @@ extension BudgetModelQueryFilter
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'totalIncome',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        epsilon: epsilon,
-      ));
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'totalIncome',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+
+          epsilon: epsilon,
+        ),
+      );
     });
   }
 }
@@ -686,7 +733,7 @@ extension BudgetModelQuerySortBy
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterSortBy>
-      sortByCurrencySymbolDesc() {
+  sortByCurrencySymbolDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'currencySymbol', Sort.desc);
     });
@@ -738,7 +785,7 @@ extension BudgetModelQuerySortThenBy
   }
 
   QueryBuilder<BudgetModel, BudgetModel, QAfterSortBy>
-      thenByCurrencySymbolDesc() {
+  thenByCurrencySymbolDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'currencySymbol', Sort.desc);
     });
@@ -783,18 +830,22 @@ extension BudgetModelQuerySortThenBy
 
 extension BudgetModelQueryWhereDistinct
     on QueryBuilder<BudgetModel, BudgetModel, QDistinct> {
-  QueryBuilder<BudgetModel, BudgetModel, QDistinct> distinctByCountry(
-      {bool caseSensitive = true}) {
+  QueryBuilder<BudgetModel, BudgetModel, QDistinct> distinctByCountry({
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'country', caseSensitive: caseSensitive);
     });
   }
 
-  QueryBuilder<BudgetModel, BudgetModel, QDistinct> distinctByCurrencySymbol(
-      {bool caseSensitive = true}) {
+  QueryBuilder<BudgetModel, BudgetModel, QDistinct> distinctByCurrencySymbol({
+    bool caseSensitive = true,
+  }) {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'currencySymbol',
-          caseSensitive: caseSensitive);
+      return query.addDistinctBy(
+        r'currencySymbol',
+        caseSensitive: caseSensitive,
+      );
     });
   }
 
