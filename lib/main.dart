@@ -1,26 +1,34 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:google_nav_bar/google_nav_bar.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:google_nav_bar/google_nav_bar.dart';
+import 'package:provider/provider.dart';
 
 import 'core/theme/app_theme.dart';
 import 'data/providers/storage_provider.dart';
 import 'logic/providers/budget_provider.dart';
 import 'services/notification_service.dart';
 import 'services/sms_service.dart';
+import 'services/ad_service.dart';
+import 'services/consent_manager.dart';
 
 import 'ui/screens/dashboard_screen.dart';
 import 'ui/screens/budget_planner_screen.dart';
 import 'ui/screens/review_screen.dart';
 import 'ui/screens/inbox_screen.dart';
 import 'ui/screens/onboarding_screen.dart';
+import 'ui/screens/scan_pay_screen.dart';
 import 'ui/widgets/quick_add_modal.dart';
 import 'ui/widgets/quick_add_income_modal.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+void main() {
+  // Keep the native splash on screen until the provider is ready — no
+  // Flutter splash, no animation, no extra widgets. Real app appears the
+  // moment storage finishes loading.
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: binding);
   NotificationService.initializeTimezones();
-  await NotificationService.initCallbacksOnly();
   runApp(const AppBootstrap());
 }
 
@@ -32,6 +40,7 @@ class AppBootstrap extends StatefulWidget {
 
 class _AppBootstrapState extends State<AppBootstrap> {
   BudgetProvider? _provider;
+  AppLifecycleListener? _lifecycleListener;
   String? _errorMessage; // Added to catch and display boot errors
 
   @override
@@ -40,13 +49,23 @@ class _AppBootstrapState extends State<AppBootstrap> {
     _init();
   }
 
+  @override
+  void dispose() {
+    _lifecycleListener?.dispose();
+    _provider?.dispose();
+    super.dispose();
+  }
+
   Future<void> _init() async {
     try {
-      debugPrint("Boot Sequence: 1. Starting Storage...");
+      // Storage + provider first — needed before any UI can render. Heavy
+      // optional services (consent, ads, notifications, SMS) run in the
+      // background AFTER the provider is ready, so they don't block boot.
+      debugPrint("Boot: 1. Storage...");
       final storage = StorageProvider();
       await storage.init();
 
-      debugPrint("Boot Sequence: 2. Setting up Provider...");
+      debugPrint("Boot: 2. Provider...");
       final budgetProvider = BudgetProvider(storage);
 
       NotificationService.onCategorizeDone = (ptId, categoryId) async {
@@ -55,18 +74,25 @@ class _AppBootstrapState extends State<AppBootstrap> {
       NotificationService.onNotificationTap = (ptId) =>
           budgetProvider.highlightPending(ptId);
       SmsService.onPendingAdded = (pt) => budgetProvider.notifyPendingAdded(pt);
-      AppLifecycleListener(onResume: () => budgetProvider.reloadAfterBackground());
+      _lifecycleListener = AppLifecycleListener(
+        onResume: () => budgetProvider.reloadAfterBackground(),
+      );
 
-      debugPrint("Boot Sequence: 3. Requesting Notification Permissions...");
-      await NotificationService.requestPermissions();
+      // Wait until the provider has actually pulled budget/categories from
+      // Isar — otherwise InitialRoute briefly sees `budget == null` and
+      // flashes Onboarding for users who already have a budget.
+      await budgetProvider.initialLoad;
 
-      debugPrint("Boot Sequence: 4. Initializing SMS Service...");
-      await SmsService.init();
-
-      debugPrint("Boot Sequence: 5. All done! Updating UI...");
       if (mounted) {
         setState(() => _provider = budgetProvider);
       }
+      // Remove the native splash now that the real UI can render with
+      // the correct data — no flash of the wrong first screen.
+      FlutterNativeSplash.remove();
+
+      // Fire-and-forget: these run while the user uses the first screen.
+      // None of them block the UI.
+      unawaited(_deferredInit(budgetProvider));
 
       // Handle notification that launched the app from terminated state.
       // Action taps and body taps are delivered here, not via the callback.
@@ -97,6 +123,23 @@ class _AppBootstrapState extends State<AppBootstrap> {
           _errorMessage = e.toString();
         });
       }
+    }
+  }
+
+  /// Runs after the provider is ready — does not block UI. Splash animation
+  /// will play (and probably finish) while these complete in the background.
+  Future<void> _deferredInit(BudgetProvider budgetProvider) async {
+    try {
+      await NotificationService.initCallbacksOnly();
+      // Consent + ads can take >1s; let the splash hide their latency
+      await ConsentManager.gatherConsent();
+      await AdService.init();
+      await NotificationService.requestPermissions();
+      // Never prompts — Play Store policy requires an in-app disclosure
+      // before requesting SMS permission. Triggered from OnboardingScreen.
+      await SmsService.attachIfPermitted();
+    } catch (e) {
+      debugPrint('Deferred init error (non-fatal): $e');
     }
   }
 
@@ -131,37 +174,35 @@ class _AppBootstrapState extends State<AppBootstrap> {
       );
     }
 
-    // Still loading
+    // While provider is loading the native splash is preserved on top
+    // (set up by FlutterNativeSplash.preserve in main). Return a bare
+    // black scaffold so there's no visual flicker — the native splash
+    // stays above this until we explicitly remove it.
     if (_provider == null) {
-      return MaterialApp(
+      return const MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.darkTheme,
-        home: const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        ),
+        home: Scaffold(backgroundColor: Colors.black),
       );
     }
 
-    // Boot successful, load the main app
-    return MultiProvider(
-      providers: [ChangeNotifierProvider.value(value: _provider!)],
-      child: const KeepApp(),
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.darkTheme,
+      home: MultiProvider(
+        providers: [ChangeNotifierProvider.value(value: _provider!)],
+        child: const KeepApp(),
+      ),
     );
   }
 }
 
+/// Root widget for the real app — no MaterialApp here, the outer one
+/// in [_AppBootstrapState.build] already provides theme + routing scaffold.
 class KeepApp extends StatelessWidget {
   const KeepApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Premium Budget',
-      theme: AppTheme.darkTheme,
-      home: const InitialRoute(),
-      debugShowCheckedModeBanner: false,
-    );
-  }
+  Widget build(BuildContext context) => const InitialRoute();
 }
 
 class InitialRoute extends StatelessWidget {
@@ -233,8 +274,8 @@ class _MainScreenState extends State<MainScreen> {
                       Navigator.pop(bottomSheetContext);
                       showModalBottomSheet(
                         context: context, // Uses the safe MainScreen context
-                        isScrollControlled: true, 
-                        backgroundColor: Colors.transparent, 
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
                         builder: (context) => const QuickAddModal()
                       );
                     },
@@ -247,12 +288,30 @@ class _MainScreenState extends State<MainScreen> {
                       Navigator.pop(bottomSheetContext);
                       showModalBottomSheet(
                         context: context, // Uses the safe MainScreen context
-                        isScrollControlled: true, 
-                        backgroundColor: Colors.transparent, 
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
                         builder: (context) => const QuickAddIncomeModal()
                       );
                     },
-                  )
+                  ),
+                  // UPI is India-only. Gate the tile on the user's country so
+                  // non-Indian users don't see a feature they can't use.
+                  if (context.read<BudgetProvider>().budget?.country == 'India') ...[
+                    const Divider(color: Colors.white24, height: 32),
+                    ListTile(
+                      leading: const CircleAvatar(backgroundColor: AppTheme.accentBlue, child: Icon(Icons.qr_code_scanner_rounded, color: Colors.white)),
+                      title: const Text('Pay via UPI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      subtitle: const Text('Scan QR, pay, auto-log',
+                          style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                      onTap: () {
+                        Navigator.pop(bottomSheetContext);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ScanPayScreen()),
+                        );
+                      },
+                    ),
+                  ]
                 ],
               )
             ),
