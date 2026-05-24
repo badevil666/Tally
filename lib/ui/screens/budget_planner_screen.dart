@@ -5,7 +5,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../logic/providers/budget_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/category_model.dart';
-import 'package:isar/isar.dart';
+import '../../services/ad_service.dart';
+import '../widgets/banner_ad_widget.dart';
+import 'package:isar_community/isar.dart';
 
 class BudgetPlannerScreen extends StatelessWidget {
   const BudgetPlannerScreen({super.key});
@@ -41,6 +43,12 @@ class BudgetPlannerScreen extends StatelessWidget {
                     const SizedBox(height: 12),
                     _buildSectionHeader('Fixed Bills'),
                     _buildCategoryGrid(context, provider, CategoryType.fixed),
+                    const SizedBox(height: 20),
+                    const Center(
+                      child: BannerAdWidget(
+                        adUnitId: AdService.budgetBannerAdUnitId,
+                      ),
+                    ),
                     const SizedBox(height: 80),
                   ],
                 ),
@@ -220,7 +228,7 @@ class BudgetPlannerScreen extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (ctx) => _AddCategorySheet(currencySymbol: context.read<BudgetProvider>().currencySymbol),
     ).then((result) {
-      if (result != null) {
+      if (result != null && context.mounted) {
         context.read<BudgetProvider>().addCategory(
           result['name'], result['limit'], result['type'],
           icon: result['icon'], colorHex: result['color'],
@@ -880,7 +888,7 @@ class _AllocationHeroCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currency = provider.currencySymbol;
-    final income = provider.totalMonthlyPool;
+    final income = provider.currentMonthTotalIncome;
     final savings = provider.savingsGoal;
     final allocated = provider.totalAllocated;
     final spendable = income - savings;
@@ -1092,9 +1100,24 @@ class _EditBudgetSheetState extends State<_EditBudgetSheet> {
       _savingsError = income != null && savings >= income ? 'Must be less than income' : null;
     });
     if (_incomeError != null || _savingsError != null) return;
+
+    // Block lowering income below what's already allocated to categories —
+    // otherwise daily-limit math goes negative and the dashboard breaks.
+    final allocated = widget.provider.totalAllocated;
+    final spendable = income! - savings;
+    if (allocated > spendable) {
+      final currency = widget.provider.currencySymbol;
+      setState(() {
+        _incomeError =
+            'Your categories already use $currency${allocated.toStringAsFixed(0)}. '
+            'Increase income or lower category limits in the Budget tab.';
+      });
+      return;
+    }
+
     setState(() => _saving = true);
     await widget.provider.setBudget(
-      income!,
+      income,
       savings,
       country: widget.provider.budget?.country ?? 'India',
       currencySymbol: widget.provider.currencySymbol,

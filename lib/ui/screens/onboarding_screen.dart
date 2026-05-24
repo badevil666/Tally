@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../logic/providers/budget_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/category_model.dart';
+import '../../services/sms_service.dart';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -58,10 +60,15 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
+// Hosted privacy policy — must be reachable for Play Console Data Safety form.
+const String kPrivacyPolicyUrl =
+    'https://badevil666.github.io/badevil666/tally-privacy.html';
+
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _pageCtrl = PageController();
   int _step = 0;
-  static const int _totalSteps = 7;
+  static const int _totalSteps = 9;
+  bool _smsRequestInFlight = false;
 
   // Step 0
   String _country = 'India';
@@ -176,7 +183,41 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         final totalLife = _sumLimits(lifeCats);
         final remaining = _income - _savings - totalFixed - totalLife;
 
-        return Scaffold(
+        return PopScope(
+          // Intercept the system back button so users don't accidentally
+          // exit during onboarding. Step > 0 → go back one step. Step 0 →
+          // ask before exiting the app.
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) async {
+            if (didPop) return;
+            if (_step > 0) {
+              _prev();
+              return;
+            }
+            final exit = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Exit Tally?'),
+                content: const Text(
+                  'You haven\'t set up your budget yet. Are you sure you want to exit?',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Stay'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Exit'),
+                  ),
+                ],
+              ),
+            );
+            if (exit == true) {
+              SystemNavigator.pop();
+            }
+          },
+          child: Scaffold(
           backgroundColor: AppTheme.background,
           body: SafeArea(
             child: Column(
@@ -188,6 +229,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     physics: const NeverScrollableScrollPhysics(),
                     children: [
                       _buildCountryStep(currency),
+                      _buildSmsDemoStep(currency),
+                      _buildSmsPermissionStep(),
                       _buildIncomeStep(currency),
                       _buildSavingsStep(currency),
                       _buildCategorySelectionStep(allFixedCats, allLifeCats),
@@ -213,6 +256,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ],
             ),
+          ),
           ),
         );
       },
@@ -307,7 +351,168 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ── Step 1: Income ──────────────────────────────────────────────────────────
+  // ── Step 1: SMS Demo ────────────────────────────────────────────────────────
+
+  Widget _buildSmsDemoStep(String currency) {
+    return _Page(
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 24),
+                  const Text('Meet your smart\nmoney tracker',
+                          style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center)
+                      .animate().fade(duration: 400.ms).slideY(begin: 0.2, end: 0),
+                  const SizedBox(height: 8),
+                  const Text('Tally reads your bank SMS and logs\ntransactions instantly — no manual entry',
+                          style: TextStyle(color: AppTheme.textMuted, fontSize: 14),
+                          textAlign: TextAlign.center)
+                      .animate().fade(delay: 200.ms),
+                  const SizedBox(height: 32),
+                  _SmsDemoWidget(currency: currency),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+          _NavBtn(label: "Let's set up your budget", onTap: _next),
+        ],
+      ),
+    );
+  }
+
+  // ── Step 2: SMS Permission Disclosure ───────────────────────────────────────
+  // Play Store SMS/Call Log Permissions Policy requires a prominent in-app
+  // disclosure explaining the use of these permissions BEFORE the OS prompt,
+  // and an explicit user action (button tap) to trigger the request. Users
+  // must also be able to use the app without granting SMS permissions.
+
+  Widget _buildSmsPermissionStep() {
+    return _Page(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 16),
+                  const Center(
+                    child: Icon(Icons.sms_outlined, size: 56, color: AppTheme.accent),
+                  ).animate().scale(duration: 400.ms),
+                  const SizedBox(height: 20),
+                  const Text('Allow SMS access',
+                          style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center)
+                      .animate()
+                      .fade(delay: 100.ms)
+                      .slideY(begin: 0.2, end: 0),
+                  const SizedBox(height: 20),
+                  Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppTheme.cardSurface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Icon(Icons.bolt, size: 18, color: AppTheme.accent),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Tally uses SMS to automatically detect bank '
+                      'transaction notifications and create expense entries '
+                      'for you — no manual typing.',
+                      style: TextStyle(fontSize: 14, height: 1.45),
+                    ),
+                  ),
+                ]),
+                SizedBox(height: 14),
+                Row(children: [
+                  Icon(Icons.lock_outline, size: 18, color: AppTheme.success),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'SMS content is processed only on your device. '
+                      'It is never uploaded, shared, or transmitted to '
+                      'any server.',
+                      style: TextStyle(fontSize: 14, height: 1.45),
+                    ),
+                  ),
+                ]),
+                SizedBox(height: 14),
+                Row(children: [
+                  Icon(Icons.edit_outlined, size: 18, color: AppTheme.textMuted),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "You can skip this and add expenses manually — "
+                      "Tally works either way.",
+                      style: TextStyle(fontSize: 14, height: 1.45),
+                    ),
+                  ),
+                ]),
+              ],
+            ),
+                  ).animate().fade(delay: 200.ms),
+                  const SizedBox(height: 18),
+                  Center(
+                    child: TextButton(
+                      onPressed: _openPrivacyPolicy,
+                      child: const Text('Read our Privacy Policy',
+                          style: TextStyle(
+                              color: AppTheme.accent,
+                              decoration: TextDecoration.underline)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+          ),
+          _NavBtn(
+            label: _smsRequestInFlight ? 'Requesting...' : 'Allow SMS access',
+            onTap: _smsRequestInFlight ? null : _grantSmsAndContinue,
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: _smsRequestInFlight ? null : _next,
+            child: const Text("Skip — I'll add manually",
+                style: TextStyle(color: AppTheme.textMuted)),
+          ),
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _grantSmsAndContinue() async {
+    setState(() => _smsRequestInFlight = true);
+    try {
+      await SmsService.requestPermissionAndInit();
+    } finally {
+      if (mounted) {
+        setState(() => _smsRequestInFlight = false);
+        _next();
+      }
+    }
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    final uri = Uri.parse(kPrivacyPolicyUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  // ── Step 3: Income ──────────────────────────────────────────────────────────
 
   Widget _buildIncomeStep(String currency) {
     return _Page(
@@ -713,21 +918,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return _Page(
       child: Column(
         children: [
-          const Spacer(),
-          const Icon(Icons.check_circle, size: 72, color: AppTheme.success)
-              .animate().scale(duration: 500.ms),
-          const SizedBox(height: 20),
-          const Text('Your Budget is Ready!',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center)
-              .animate().fade(delay: 100.ms).slideY(begin: 0.2, end: 0),
-          const SizedBox(height: 8),
-          const Text("Here's where your money goes each month",
-              style: TextStyle(color: AppTheme.textMuted, fontSize: 14),
-              textAlign: TextAlign.center)
-              .animate().fade(delay: 200.ms),
-          const SizedBox(height: 32),
-          Container(
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 24),
+                  const Icon(Icons.check_circle, size: 72, color: AppTheme.success)
+                      .animate().scale(duration: 500.ms),
+                  const SizedBox(height: 20),
+                  const Text('Your Budget is Ready!',
+                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center)
+                      .animate().fade(delay: 100.ms).slideY(begin: 0.2, end: 0),
+                  const SizedBox(height: 8),
+                  const Text("Here's where your money goes each month",
+                      style: TextStyle(color: AppTheme.textMuted, fontSize: 14),
+                      textAlign: TextAlign.center)
+                      .animate().fade(delay: 200.ms),
+                  const SizedBox(height: 32),
+                  Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: AppTheme.cardSurface,
@@ -768,8 +977,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     .animate().fade(delay: 700.ms),
               ],
             ),
-          ).animate().fade(delay: 250.ms).slideY(begin: 0.1),
-          const Spacer(),
+                  ).animate().fade(delay: 250.ms).slideY(begin: 0.1),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
           Row(children: [
             _NavBtn(label: 'Back', onTap: _prev, secondary: true),
             const SizedBox(width: 12),
@@ -786,6 +999,298 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 }
 
 // ─── Reusable Widgets ─────────────────────────────────────────────────────────
+
+// ─── SMS Demo Widget ──────────────────────────────────────────────────────────
+
+class _SmsDemoWidget extends StatefulWidget {
+  final String currency;
+  const _SmsDemoWidget({required this.currency});
+
+  @override
+  State<_SmsDemoWidget> createState() => _SmsDemoWidgetState();
+}
+
+class _SmsDemoWidgetState extends State<_SmsDemoWidget> with TickerProviderStateMixin {
+  // Stages: 0=idle, 1=sms arriving, 2=detected, 3=categorized, 4=done
+  int _stage = 0;
+  int? _pickedCat; // index of picked category
+  late AnimationController _pulseCtrl;
+  late Animation<double> _pulse;
+
+  final _categories = [
+    {'label': 'Food', 'icon': Icons.restaurant_rounded, 'color': Color(0xFFFF6B6B)},
+    {'label': 'Transport', 'icon': Icons.directions_car_rounded, 'color': Color(0xFF4FC3F7)},
+    {'label': 'Shopping', 'icon': Icons.shopping_bag_rounded, 'color': Color(0xFFFFD54F)},
+    {'label': 'Other', 'icon': Icons.category_rounded, 'color': Color(0xFFB39DDB)},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat(reverse: true);
+    _pulse = Tween(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+    Future.delayed(const Duration(milliseconds: 600), _startDemo);
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  void _startDemo() {
+    if (!mounted) return;
+    setState(() => _stage = 1);
+    Future.delayed(const Duration(milliseconds: 1400), () {
+      if (!mounted) return;
+      setState(() => _stage = 2);
+      HapticFeedback.mediumImpact();
+    });
+  }
+
+  void _pickCategory(int index) {
+    if (_stage < 2 || _pickedCat != null) return;
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _pickedCat = index;
+      _stage = 3;
+    });
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (!mounted) return;
+      setState(() => _stage = 4);
+    });
+  }
+
+  void _replay() {
+    setState(() { _stage = 0; _pickedCat = null; });
+    Future.delayed(const Duration(milliseconds: 300), _startDemo);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cur = widget.currency;
+    return Column(
+      children: [
+        // ── Phone mockup ──────────────────────────────────────────────────────
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF111111),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white10, width: 1.5),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 24, offset: const Offset(0, 8))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Status bar
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                const Text('9:41', style: TextStyle(fontSize: 12, color: Colors.white54, fontWeight: FontWeight.bold)),
+                Row(children: const [
+                  Icon(Icons.signal_cellular_alt, size: 14, color: Colors.white54),
+                  SizedBox(width: 4),
+                  Icon(Icons.wifi, size: 14, color: Colors.white54),
+                  SizedBox(width: 4),
+                  Icon(Icons.battery_full, size: 14, color: Colors.white54),
+                ]),
+              ]),
+              const SizedBox(height: 12),
+
+              // SMS notification sliding in
+              AnimatedSlide(
+                offset: _stage >= 1 ? Offset.zero : const Offset(0, -0.4),
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeOutBack,
+                child: AnimatedOpacity(
+                  opacity: _stage >= 1 ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 400),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E1E1E),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(color: Colors.green.withOpacity(0.2), shape: BoxShape.circle),
+                            child: const Icon(Icons.sms_rounded, size: 14, color: Colors.green),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text('HDFCBANK', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                          const Spacer(),
+                          const Text('now', style: TextStyle(fontSize: 11, color: Colors.white38)),
+                        ]),
+                        const SizedBox(height: 8),
+                        RichText(
+                          text: TextSpan(
+                            style: const TextStyle(fontSize: 13, color: Colors.white60, height: 1.5),
+                            children: [
+                              const TextSpan(text: 'Your A/c XX4521 debited by '),
+                              TextSpan(
+                                text: '${cur}450',
+                                style: const TextStyle(
+                                  color: Colors.redAccent,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              TextSpan(text: ' on 10-Apr at Zomato. Avl Bal: ${cur}12,340'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Tally detection card
+              AnimatedSlide(
+                offset: _stage >= 2 ? Offset.zero : const Offset(0, 0.3),
+                duration: const Duration(milliseconds: 450),
+                curve: Curves.easeOutBack,
+                child: AnimatedOpacity(
+                  opacity: _stage >= 2 ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 350),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [AppTheme.accent.withOpacity(0.15), Colors.transparent],
+                        begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppTheme.accent.withOpacity(0.4)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          ScaleTransition(
+                            scale: _pulse,
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: BoxDecoration(color: AppTheme.accent.withOpacity(0.2), shape: BoxShape.circle),
+                              child: const Icon(Icons.auto_awesome, size: 13, color: AppTheme.accent),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text('Tally detected a transaction',
+                              style: TextStyle(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.bold)),
+                        ]),
+                        const SizedBox(height: 10),
+                        Row(children: [
+                          Text('${cur}450',
+                              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white)),
+                          const SizedBox(width: 8),
+                          const Text('at Zomato',
+                              style: TextStyle(fontSize: 14, color: Colors.white54)),
+                        ]),
+                        const SizedBox(height: 12),
+
+                        // Stage 3+: show picked category with check
+                        if (_stage >= 3 && _pickedCat != null) ...[
+                          AnimatedOpacity(
+                            opacity: 1.0,
+                            duration: const Duration(milliseconds: 300),
+                            child: Row(children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: (_categories[_pickedCat!]['color'] as Color).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: _categories[_pickedCat!]['color'] as Color),
+                                ),
+                                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                  Icon(_categories[_pickedCat!]['icon'] as IconData,
+                                      size: 16, color: _categories[_pickedCat!]['color'] as Color),
+                                  const SizedBox(width: 6),
+                                  Text(_categories[_pickedCat!]['label'] as String,
+                                      style: TextStyle(color: _categories[_pickedCat!]['color'] as Color,
+                                          fontWeight: FontWeight.bold, fontSize: 13)),
+                                ]),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 20)
+                                  .animate().scale(duration: 300.ms, curve: Curves.elasticOut),
+                            ]),
+                          ),
+                        ] else ...[
+                          // Category picker chips
+                          const Text('Where did you spend?',
+                              style: TextStyle(fontSize: 12, color: Colors.white54)),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: List.generate(_categories.length, (i) {
+                              final cat = _categories[i];
+                              return GestureDetector(
+                                onTap: () => _pickCategory(i),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                  decoration: BoxDecoration(
+                                    color: (cat['color'] as Color).withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(color: (cat['color'] as Color).withOpacity(0.5)),
+                                  ),
+                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                    Icon(cat['icon'] as IconData, size: 14, color: cat['color'] as Color),
+                                    const SizedBox(width: 5),
+                                    Text(cat['label'] as String,
+                                        style: TextStyle(color: cat['color'] as Color,
+                                            fontSize: 12, fontWeight: FontWeight.w600)),
+                                  ]),
+                                ),
+                              );
+                            }),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Done state / replay
+        if (_stage == 4)
+          Column(children: [
+            const Text('Transaction logged instantly!',
+                style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 14))
+                .animate().fade(duration: 400.ms).slideY(begin: 0.3, end: 0),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: _replay,
+              icon: const Icon(Icons.replay_rounded, size: 16, color: AppTheme.textMuted),
+              label: const Text('Replay demo', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+            ),
+          ])
+        else if (_stage == 2)
+          const Text('Tap a category to categorize it',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 13))
+              .animate().fade(delay: 200.ms),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _Page extends StatelessWidget {
   final Widget child;

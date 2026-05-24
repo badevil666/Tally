@@ -4,12 +4,16 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:math';
 import '../../logic/providers/budget_provider.dart';
 import '../../services/seed_service.dart';
+import '../../services/consent_manager.dart';
 import '../../data/models/category_model.dart';
 import '../../core/theme/app_theme.dart';
 import 'smart_budget_screen.dart';
+import 'onboarding_screen.dart' show kPrivacyPolicyUrl;
+import '../widgets/banner_ad_widget.dart';
 
 // ─── Painters ────────────────────────────────────────────────────────────────
 
@@ -152,41 +156,197 @@ IconData _iconData(String name) {
   return map[name] ?? Icons.category;
 }
 
-// ─── Spending Circle ─────────────────────────────────────────────────────────
+// ─── Spending Card ───────────────────────────────────────────────────────────
+// Replaces the old _SpendingCircle. Card-style layout with status pill, big
+// amount, progress bar, and "left/over" footer — scannable at a glance.
 
-class _SpendingCircle extends StatelessWidget {
+class _SpendingCard extends StatelessWidget {
   final String label;
   final double spent;
   final double limit;
   final double percentage;
   final Color color;
   final String currencySymbol;
+  final IconData icon;
 
-  const _SpendingCircle({
-    required this.label, required this.spent, required this.limit,
-    required this.percentage, required this.color, required this.currencySymbol,
+  const _SpendingCard({
+    required this.label,
+    required this.spent,
+    required this.limit,
+    required this.percentage,
+    required this.color,
+    required this.currencySymbol,
+    required this.icon,
   });
+
+  String get _statusText {
+    if (percentage >= 1.0) return 'OVER';
+    if (percentage >= 0.9) return 'TIGHT';
+    if (percentage >= 0.7) return 'WATCH';
+    return 'HEALTHY';
+  }
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 155,
-      height: 155,
-      child: CustomPaint(
-        painter: SafeToSpendPainter(percentage: percentage, color: color),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    final pctClamped = percentage.clamp(0.0, 1.0);
+    final pctDisplay = (percentage * 100).clamp(0, 999).round();
+    final remaining = (limit - spent).clamp(0.0, double.infinity);
+    final hasLimit = limit > 0;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withValues(alpha: 0.14),
+            AppTheme.cardSurface,
+          ],
+          stops: const [0.0, 0.7],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: color.withValues(alpha: 0.28), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Header: icon + label + percentage pill ──
+          Row(
             children: [
-              Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
-              const SizedBox(height: 4),
-              Text('$currencySymbol${spent.toStringAsFixed(0)}',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-              Text('/ $currencySymbol${limit.toStringAsFixed(0)}',
-                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, size: 12, color: color),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label.toUpperCase(),
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppTheme.textMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              if (hasLimit)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$pctDisplay%',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ),
             ],
           ),
-        ),
+
+          const SizedBox(height: 14),
+
+          // ── Big amount ──
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: currencySymbol,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: color.withValues(alpha: 0.65),
+                      fontFamily: 'Inter',
+                    ),
+                  ),
+                  TextSpan(
+                    text: spent.toStringAsFixed(0),
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textLight,
+                      letterSpacing: -0.8,
+                      fontFamily: 'Inter',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            hasLimit
+                ? 'of $currencySymbol${limit.toStringAsFixed(0)}'
+                : 'no limit set',
+            style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+          ),
+
+          const SizedBox(height: 12),
+
+          // ── Progress bar ──
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: hasLimit ? pctClamped : 0,
+              minHeight: 5,
+              backgroundColor: color.withValues(alpha: 0.13),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // ── Footer: status + remaining/over ──
+          Row(
+            children: [
+              Text(
+                _statusText,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.6,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                !hasLimit
+                    ? '—'
+                    : percentage >= 1.0
+                        ? '+$currencySymbol${(spent - limit).toStringAsFixed(0)}'
+                        : '$currencySymbol${remaining.toStringAsFixed(0)} left',
+                style: TextStyle(
+                  color: percentage >= 1.0 ? color : AppTheme.textMuted,
+                  fontSize: 10,
+                  fontWeight: percentage >= 1.0 ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -241,7 +401,10 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-// ─── Layout 1: Currency-note cards (3 per row) ───────────────────────────────
+// ─── Layout 1: Category cards (3 per row) ────────────────────────────────────
+// Clean, minimal card with gradient tint, icon chip, spent amount, progress
+// bar, and a percentage/status footer. Replaces the older skeuomorphic
+// "currency-note" look.
 
 class _BarsLayout extends StatelessWidget {
   final List<_CatData> cats;
@@ -256,14 +419,15 @@ class _BarsLayout extends StatelessWidget {
         const spacing = 10.0;
         const cols = 3;
         final itemW = (constraints.maxWidth - spacing * (cols - 1)) / cols;
-        final itemH = itemW / 0.72;
+        // Slightly less elongated than before — modern card proportions.
+        final itemH = itemW / 0.82;
         return Wrap(
           spacing: spacing,
           runSpacing: spacing,
           children: cats.map((d) => SizedBox(
             width: itemW,
             height: itemH,
-            child: _BillCard(d: d, currencySymbol: currencySymbol),
+            child: _CategoryCard(d: d, currencySymbol: currencySymbol),
           )).toList(),
         );
       },
@@ -271,262 +435,184 @@ class _BarsLayout extends StatelessWidget {
   }
 }
 
-// ── Decorative note background painter ───────────────────────────────────────
-
-class _NotePainter extends CustomPainter {
-  final Color color;
-  _NotePainter(this.color);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // ── Security thread strip (left edge) ────────────────────────────────
-    final threadPaint = Paint()..color = color.withValues(alpha: 0.18);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, 5, size.height),
-        const Radius.circular(2),
-      ),
-      threadPaint,
-    );
-
-    // ── Fine diagonal hatching lines ──────────────────────────────────────
-    final linePaint = Paint()
-      ..color = color.withValues(alpha: 0.06)
-      ..strokeWidth = 0.8;
-    const spacing = 8.0;
-    for (double x = -size.height; x < size.width + size.height; x += spacing) {
-      canvas.drawLine(Offset(x, 0), Offset(x + size.height, size.height), linePaint);
-    }
-
-    // ── Corner ornament circles ───────────────────────────────────────────
-    final dotPaint = Paint()
-      ..color = color.withValues(alpha: 0.25)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    const r = 5.0;
-    const m = 6.0;
-    for (final offset in [
-      Offset(m + r, m + r),
-      Offset(size.width - m - r, m + r),
-      Offset(m + r, size.height - m - r),
-      Offset(size.width - m - r, size.height - m - r),
-    ]) {
-      canvas.drawCircle(offset, r, dotPaint);
-      canvas.drawCircle(offset, 2, Paint()..color = color.withValues(alpha: 0.2));
-    }
-
-    // ── Top and bottom micro-border lines ─────────────────────────────────
-    final borderLinePaint = Paint()
-      ..color = color.withValues(alpha: 0.2)
-      ..strokeWidth = 0.6;
-    canvas.drawLine(const Offset(14, 10), Offset(size.width - 14, 10), borderLinePaint);
-    canvas.drawLine(Offset(14, size.height - 10), Offset(size.width - 14, size.height - 10), borderLinePaint);
-  }
-
-  @override
-  bool shouldRepaint(_NotePainter old) => old.color != color;
-}
-
-// ── Currency note card ────────────────────────────────────────────────────────
-
-class _BillCard extends StatefulWidget {
+class _CategoryCard extends StatelessWidget {
   final _CatData d;
   final String currencySymbol;
-  const _BillCard({required this.d, required this.currencySymbol});
-
-  @override
-  State<_BillCard> createState() => _BillCardState();
-}
-
-class _BillCardState extends State<_BillCard> with SingleTickerProviderStateMixin {
-  late AnimationController _blinkCtrl;
-  late Animation<double> _blinkAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _blinkCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-    _blinkAnim = Tween<double>(begin: 1.0, end: 0.55).animate(
-      CurvedAnimation(parent: _blinkCtrl, curve: Curves.easeInOut),
-    );
-    _updateBlink();
-  }
-
-  @override
-  void didUpdateWidget(_BillCard old) {
-    super.didUpdateWidget(old);
-    _updateBlink();
-  }
-
-  void _updateBlink() {
-    final limit = widget.d.cat.limit;
-    final overBudget = limit > 0 && widget.d.spent > limit;
-    if (overBudget) {
-      if (!_blinkCtrl.isAnimating) _blinkCtrl.repeat(reverse: true);
-    } else {
-      _blinkCtrl.stop();
-      _blinkCtrl.value = 1.0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _blinkCtrl.dispose();
-    super.dispose();
-  }
+  const _CategoryCard({required this.d, required this.currencySymbol});
 
   @override
   Widget build(BuildContext context) {
-    final d = widget.d;
-    final currencySymbol = widget.currencySymbol;
     final limit = d.cat.limit;
     final overBudget = limit > 0 && d.spent > limit;
-    final noteColor = overBudget ? AppTheme.error : d.color;
+    final accent = overBudget ? AppTheme.error : d.color;
+    final pctClamped = d.pct.clamp(0.0, 1.0);
+    final pctDisplay = (d.pct * 100).clamp(0, 999).round();
     final balance = limit > 0 ? (limit - d.spent) : 0.0;
+    final hasLimit = limit > 0;
 
-    // Text is bright white when fill is high (hard to read dark text on filled bg)
-    final fillAlpha = d.pct.clamp(0.0, 1.0);
-    final textColor = Color.lerp(Colors.white70, Colors.white, fillAlpha)!;
-    final mutedTextColor = Color.lerp(AppTheme.textMuted, Colors.white70, fillAlpha)!;
-
-    return AnimatedBuilder(
-      animation: _blinkAnim,
-      builder: (context, child) => Opacity(
-        opacity: overBudget ? _blinkAnim.value : 1.0,
-        child: child,
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent.withValues(alpha: overBudget ? 0.22 : 0.13),
+            AppTheme.cardSurface,
+          ],
+          stops: const [0.0, 0.7],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: accent.withValues(alpha: overBudget ? 0.55 : 0.22),
+          width: overBudget ? 1.2 : 0.8,
+        ),
+        boxShadow: overBudget
+            ? [
+                BoxShadow(
+                  color: AppTheme.error.withValues(alpha: 0.18),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // ── Base ─────────────────────────────────────────────────────
-            Container(color: AppTheme.cardSurface),
-
-            // ── Decorative note texture ───────────────────────────────────
-            CustomPaint(painter: _NotePainter(noteColor)),
-
-            // ── Solid fill — rises from bottom proportional to spending ───
-            if (d.pct > 0)
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: FractionallySizedBox(
-                  widthFactor: 1,
-                  heightFactor: d.pct.clamp(0.0, 1.0),
-                  child: Container(color: noteColor.withValues(alpha: 0.55)),
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header: icon chip + name ──
+          Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(_iconData(d.cat.icon), size: 13, color: accent),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  d.cat.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textLight,
+                    letterSpacing: 0.1,
+                  ),
                 ),
               ),
+            ],
+          ),
 
-            // ── Fine border ───────────────────────────────────────────────
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: overBudget ? AppTheme.error.withValues(alpha: 0.8) : noteColor.withValues(alpha: 0.3),
-                  width: overBudget ? 1.5 : 0.8,
-                ),
-              ),
-            ),
+          const Spacer(),
 
-            // ── Content ───────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(9, 10, 7, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // ── Spent amount ──
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: RichText(
+              text: TextSpan(
                 children: [
-                  // Icon seal
-                  Container(
-                    width: 26,
-                    height: 26,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: noteColor.withValues(alpha: 0.2),
-                      border: Border.all(color: noteColor.withValues(alpha: 0.5), width: 0.8),
-                    ),
-                    child: Icon(_iconData(d.cat.icon), size: 13, color: Colors.white),
-                  ),
-
-                  const SizedBox(height: 6),
-
-                  // Category name — always bright
-                  Text(
-                    d.cat.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  TextSpan(
+                    text: currencySymbol,
                     style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: textColor,
-                      letterSpacing: 0.4,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textMuted,
+                      fontFamily: 'Inter',
                     ),
                   ),
-
-                  const Spacer(),
-
-                  // Spent amount
-                  Text(
-                    '$currencySymbol${d.spent.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      fontSize: 15,
+                  TextSpan(
+                    text: d.spent.toStringAsFixed(0),
+                    style: const TextStyle(
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-
-                  // Limit line
-                  if (limit > 0)
-                    Text(
-                      '/ $currencySymbol${limit.toStringAsFixed(0)}',
-                      style: TextStyle(
-                        fontSize: 8,
-                        color: mutedTextColor,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-
-                  const SizedBox(height: 2),
-
-                  // Balance or overspend
-                  if (limit > 0)
-                    Text(
-                      overBudget
-                          ? '▲ +$currencySymbol${(d.spent - limit).toStringAsFixed(0)} over'
-                          : '▽ $currencySymbol${balance.toStringAsFixed(0)} left',
-                      style: TextStyle(
-                        fontSize: 8,
-                        color: overBudget ? Colors.white : mutedTextColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    )
-                  else
-                    Text(
-                      'no limit set',
-                      style: TextStyle(fontSize: 8, color: mutedTextColor),
-                    ),
-
-                  const SizedBox(height: 6),
-
-                  // Progress bar
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: SizedBox(
-                      height: 3,
-                      child: LinearProgressIndicator(
-                        value: d.pct.clamp(0.0, 1.0),
-                        backgroundColor: Colors.white.withValues(alpha: 0.15),
-                        color: Colors.white,
-                      ),
+                      color: AppTheme.textLight,
+                      letterSpacing: -0.4,
+                      fontFamily: 'Inter',
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+
+          // ── Limit subtitle ──
+          if (hasLimit)
+            Text(
+              'of $currencySymbol${limit.toStringAsFixed(0)}',
+              style: const TextStyle(
+                  color: AppTheme.textMuted, fontSize: 9, height: 1.2),
+            )
+          else
+            const Text(
+              'no limit',
+              style: TextStyle(color: AppTheme.textMuted, fontSize: 9),
+            ),
+
+          const SizedBox(height: 8),
+
+          // ── Progress bar ──
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: SizedBox(
+              height: 4,
+              child: LinearProgressIndicator(
+                value: hasLimit ? pctClamped : 0,
+                backgroundColor: accent.withValues(alpha: 0.13),
+                valueColor: AlwaysStoppedAnimation<Color>(accent),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          // ── Footer: percent + remaining/over ──
+          Row(
+            children: [
+              if (hasLimit)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '$pctDisplay%',
+                    style: TextStyle(
+                      fontSize: 8.5,
+                      fontWeight: FontWeight.bold,
+                      color: accent,
+                    ),
+                  ),
+                ),
+              const Spacer(),
+              Flexible(
+                child: Text(
+                  !hasLimit
+                      ? ''
+                      : overBudget
+                          ? '+$currencySymbol${(d.spent - limit).toStringAsFixed(0)}'
+                          : '$currencySymbol${balance.toStringAsFixed(0)} left',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontSize: 8.5,
+                    color: overBudget ? accent : AppTheme.textMuted,
+                    fontWeight:
+                        overBudget ? FontWeight.bold : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -699,6 +785,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   int _layoutIndex = 0; // 0=bars, 1=circles, 2=concentric
   static const _layoutIcons = [Icons.bar_chart, Icons.bubble_chart, Icons.donut_large];
+  final _bannerKey = GlobalKey();
 
   void _showSettings(BuildContext context) {
     showModalBottomSheet(
@@ -712,7 +799,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Consumer<BudgetProvider>(
-      builder: (context, provider, child) {
+      child: Center(child: BannerAdWidget(key: _bannerKey)),
+      builder: (context, provider, bannerAd) {
         final monthlySpent = provider.monthlyExpenseTotal;
         final monthlyLimit = provider.totalAllocated > 0 ? provider.totalAllocated : provider.totalMonthlyPool;
         final monthlyPct = monthlyLimit > 0 ? (monthlySpent / monthlyLimit).clamp(0.0, 1.0) : 0.0;
@@ -799,18 +887,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
           body: ListView(
             padding: const EdgeInsets.all(24),
             children: [
-              // ── Spending circles ──
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _SpendingCircle(label: 'Monthly', spent: monthlySpent, limit: monthlyLimit,
-                      percentage: monthlyPct, color: monthlyColor, currencySymbol: provider.currencySymbol),
-                  _SpendingCircle(label: 'Today', spent: dailySpent, limit: dailyLimit,
-                      percentage: dailyPct, color: dailyColor, currencySymbol: provider.currencySymbol),
-                ],
-              ).animate().fade(duration: 500.ms).scale(),
+              // ── Spending cards ──
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: _SpendingCard(
+                        label: 'Monthly',
+                        icon: Icons.calendar_month_rounded,
+                        spent: monthlySpent,
+                        limit: monthlyLimit,
+                        percentage: monthlyPct,
+                        color: monthlyColor,
+                        currencySymbol: provider.currencySymbol,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _SpendingCard(
+                        label: 'Today',
+                        icon: Icons.today_rounded,
+                        spent: dailySpent,
+                        limit: dailyLimit,
+                        percentage: dailyPct,
+                        color: dailyColor,
+                        currencySymbol: provider.currencySymbol,
+                      ),
+                    ),
+                  ],
+                ),
+              ).animate().fade(duration: 500.ms).slideY(begin: 0.05, end: 0),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
+              if (bannerAd != null) bannerAd,
+              const SizedBox(height: 24),
 
               // ── Categories heading + layout switcher ──
               Row(
@@ -1028,6 +1139,27 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           const SizedBox(height: 8),
           _SeedDataButton(),
           const SizedBox(height: 8),
+          _HardResetButton(),
+          const SizedBox(height: 16),
+          const Text('LEGAL',
+              style: TextStyle(
+                  color: AppTheme.textMuted,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8)),
+          const SizedBox(height: 8),
+          _LegalLinkTile(
+            icon: Icons.shield_outlined,
+            label: 'Privacy Policy',
+            onTap: () async {
+              final uri = Uri.parse(kPrivacyPolicyUrl);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+          const _AdPreferencesTile(),
+          const SizedBox(height: 8),
           TextButton(
             onPressed: () => Navigator.pop(context),
             style: TextButton.styleFrom(
@@ -1082,6 +1214,48 @@ class _SeedDataButtonState extends State<_SeedDataButton> {
           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accent))
           : Icon(_done ? Icons.check_circle_rounded : Icons.science_rounded, size: 18),
       label: Text(_done ? 'Data Seeded!' : 'Seed Realistic Test Data'),
+    );
+  }
+}
+
+class _HardResetButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () async {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            backgroundColor: AppTheme.cardSurface,
+            title: const Text('Hard Reset?', style: TextStyle(color: AppTheme.error)),
+            content: const Text(
+              'This will permanently delete all your budgets, categories, transactions, and savings data.\n\nThis cannot be undone.',
+              style: TextStyle(color: AppTheme.textMuted, height: 1.5),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(foregroundColor: AppTheme.error),
+                child: const Text('Delete Everything'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !context.mounted) return;
+        Navigator.pop(context); // close settings sheet
+        await context.read<BudgetProvider>().hardReset();
+      },
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 48),
+        foregroundColor: AppTheme.error,
+        side: BorderSide(color: AppTheme.error.withOpacity(0.4)),
+      ),
+      icon: const Icon(Icons.delete_forever_rounded, size: 18),
+      label: const Text('Hard Reset'),
     );
   }
 }
@@ -1157,6 +1331,75 @@ class _PrefTile extends StatelessWidget {
                   color: Colors.white24, size: 20),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _LegalLinkTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _LegalLinkTile({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+        child: Row(children: [
+          Icon(icon, size: 18, color: AppTheme.textMuted),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(fontSize: 14, color: AppTheme.textLight)),
+          ),
+          const Icon(Icons.open_in_new, size: 14, color: AppTheme.textMuted),
+        ]),
+      ),
+    );
+  }
+}
+
+class _AdPreferencesTile extends StatefulWidget {
+  const _AdPreferencesTile();
+  @override
+  State<_AdPreferencesTile> createState() => _AdPreferencesTileState();
+}
+
+class _AdPreferencesTileState extends State<_AdPreferencesTile> {
+  bool _available = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    final required = await ConsentManager.isPrivacyOptionsRequired();
+    if (mounted) setState(() => _available = required);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_available) return const SizedBox.shrink();
+    return InkWell(
+      onTap: () => ConsentManager.showPrivacyOptionsForm(),
+      borderRadius: BorderRadius.circular(12),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+        child: Row(children: [
+          Icon(Icons.ads_click_rounded, size: 18, color: AppTheme.textMuted),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text('Manage ad preferences',
+                style: TextStyle(fontSize: 14, color: AppTheme.textLight)),
+          ),
+          Icon(Icons.chevron_right, size: 18, color: AppTheme.textMuted),
+        ]),
       ),
     );
   }

@@ -7,7 +7,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
 import '../widgets/quick_add_modal.dart' show AttachmentViewer;
+import '../widgets/banner_ad_widget.dart';
+import '../../services/ad_service.dart';
 
 import '../../logic/providers/budget_provider.dart';
 import '../../core/theme/app_theme.dart';
@@ -16,84 +19,218 @@ import '../../data/models/transaction_model.dart';
 import '../../data/models/inflow_model.dart';
 
 void _showEditTransactionSheet(BuildContext context, BudgetProvider provider, TransactionModel tx) {
-  final amountCtrl = TextEditingController(text: tx.amount.toStringAsFixed(0));
-  int selectedCategoryId = tx.category.value?.id ?? provider.categories.first.id;
-
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setState) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-          decoration: const BoxDecoration(
-            color: AppTheme.cardSurface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Edit Transaction', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 24),
-              TextField(
-                controller: amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                autofocus: true,
-                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                decoration: InputDecoration(
-                  prefixText: '${provider.currencySymbol} ',
-                  prefixStyle: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                  filled: true,
-                  fillColor: AppTheme.background,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                ),
+    builder: (_) => _EditTransactionSheet(provider: provider, tx: tx),
+  );
+}
+
+class _EditTransactionSheet extends StatefulWidget {
+  final BudgetProvider provider;
+  final TransactionModel tx;
+  const _EditTransactionSheet({required this.provider, required this.tx});
+
+  @override
+  State<_EditTransactionSheet> createState() => _EditTransactionSheetState();
+}
+
+class _EditTransactionSheetState extends State<_EditTransactionSheet> {
+  late final TextEditingController _amountCtrl;
+  int? _selectedCategoryId;
+  late String _currentAttachmentPath;
+  String? _newAttachmentPath; // picked but not yet saved
+  bool _clearAttachment = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountCtrl = TextEditingController(text: widget.tx.amount.toStringAsFixed(0));
+    _selectedCategoryId = widget.tx.category.value?.id ?? (widget.provider.categories.isNotEmpty ? widget.provider.categories.first.id : null);
+    _currentAttachmentPath = widget.tx.attachmentPath;
+  }
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickAttachment() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+    );
+    if (result != null && result.files.single.path != null) {
+      setState(() {
+        _newAttachmentPath = result.files.single.path;
+        _clearAttachment = false;
+      });
+    }
+  }
+
+  String get _displayAttachmentPath => _newAttachmentPath ?? (_clearAttachment ? '' : _currentAttachmentPath);
+  bool get _hasAttachment => _displayAttachmentPath.isNotEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = widget.provider;
+    final isPdf = _displayAttachmentPath.toLowerCase().endsWith('.pdf');
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+        decoration: const BoxDecoration(
+          color: AppTheme.cardSurface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Edit Transaction', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _amountCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+              decoration: InputDecoration(
+                prefixText: '${provider.currencySymbol} ',
+                prefixStyle: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                filled: true,
+                fillColor: AppTheme.background,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
               ),
-              const SizedBox(height: 16),
-              const Text('Category', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: provider.categories.map((cat) {
-                  final selected = cat.id == selectedCategoryId;
-                  return GestureDetector(
-                    onTap: () => setState(() => selectedCategoryId = cat.id),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: selected ? AppTheme.accent.withOpacity(0.2) : AppTheme.background,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: selected ? AppTheme.accent : Colors.white12),
-                      ),
-                      child: Text(cat.name, style: TextStyle(color: selected ? AppTheme.accent : AppTheme.textLight, fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
+            ),
+            const SizedBox(height: 16),
+            const Text('Category', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: provider.categories.map((cat) {
+                final selected = cat.id == _selectedCategoryId;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedCategoryId = cat.id),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: selected ? AppTheme.accent.withOpacity(0.2) : AppTheme.background,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: selected ? AppTheme.accent : Colors.white12),
                     ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accent, foregroundColor: Colors.black, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                  onPressed: () {
-                    final amount = double.tryParse(amountCtrl.text);
-                    if (amount != null && amount > 0) {
-                      provider.updateTransaction(tx.id, amount, selectedCategoryId);
-                      Navigator.pop(ctx);
-                    }
-                  },
-                  child: const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    child: Text(cat.name, style: TextStyle(
+                      color: selected ? AppTheme.accent : AppTheme.textLight,
+                      fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                    )),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Receipt section ──────────────────────────────────────────
+            const Text('Receipt', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+            const SizedBox(height: 8),
+            if (_hasAttachment)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppTheme.background,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white12),
                 ),
+                child: Row(children: [
+                  GestureDetector(
+                    onTap: () => AttachmentViewer.open(context, _displayAttachmentPath),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.accent.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(isPdf ? Icons.picture_as_pdf : Icons.image, size: 20, color: AppTheme.accent),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: GestureDetector(
+                    onTap: () => AttachmentViewer.open(context, _displayAttachmentPath),
+                    child: Text(
+                      _newAttachmentPath != null ? 'New receipt selected' : 'View receipt',
+                      style: const TextStyle(color: AppTheme.accent, fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                  )),
+                  GestureDetector(
+                    onTap: () => setState(() { _newAttachmentPath = null; _clearAttachment = true; }),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.error.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.delete_outline, size: 16, color: AppTheme.error),
+                    ),
+                  ),
+                ]),
+              )
+            else
+              GestureDetector(
+                onTap: _pickAttachment,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppTheme.background,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white12, style: BorderStyle.solid),
+                  ),
+                  child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.add_photo_alternate_outlined, size: 18, color: AppTheme.textMuted),
+                    SizedBox(width: 8),
+                    Text('Attach receipt', style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+                  ]),
+                ),
+              ),
+            if (_hasAttachment) ...[
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: _pickAttachment,
+                child: const Text('Replace receipt', style: TextStyle(color: AppTheme.textMuted, fontSize: 12, decoration: TextDecoration.underline)),
               ),
             ],
-          ),
+
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accent,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: () {
+                  final amount = double.tryParse(_amountCtrl.text);
+                  if (amount != null && amount > 0 && _selectedCategoryId != null) {
+                    provider.updateTransaction(
+                      widget.tx.id, amount, _selectedCategoryId!,
+                      newAttachmentSourcePath: _newAttachmentPath,
+                      clearAttachment: _clearAttachment,
+                    );
+                    Navigator.pop(context);
+                  }
+                },
+                child: const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ),
+          ],
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class ReviewScreen extends StatefulWidget {
@@ -105,6 +242,7 @@ class ReviewScreen extends StatefulWidget {
 
 class _ReviewScreenState extends State<ReviewScreen> {
   final _searchCtrl = TextEditingController();
+  bool _timelineView = false;
 
   @override
   void dispose() {
@@ -166,15 +304,48 @@ class _ReviewScreenState extends State<ReviewScreen> {
   }
 
   Future<void> _exportCsv(BuildContext context, BudgetProvider provider) async {
+    final inflows = provider.monthlyInflows;
+    final txs = provider.monthlyTransactions;
+
+    if (inflows.isEmpty && txs.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nothing to export for this month')),
+        );
+      }
+      return;
+    }
+
     List<List<dynamic>> rows = [];
     rows.add(["Date", "Type", "Category/Source", "Title/Description", "Amount"]);
 
-    for (var inf in provider.monthlyInflows) {
-      rows.add([DateFormat('yyyy-MM-dd').format(inf.date), "In", inf.sourceCategory, inf.title, inf.amount]);
+    for (var inf in inflows) {
+      rows.add([
+        DateFormat('yyyy-MM-dd').format(inf.date),
+        "In",
+        inf.sourceCategory,
+        inf.title,
+        inf.amount,
+      ]);
     }
 
-    for (var tx in provider.monthlyTransactions) {
-      rows.add([DateFormat('yyyy-MM-dd').format(tx.date), "Out", tx.category.value?.name ?? 'Unknown', tx.description, tx.amount]);
+    for (var tx in txs) {
+      // Guard the IsarLink — if the link relation is broken (e.g., category
+      // was deleted without reassign), value could throw on access. Wrap in
+      // try/catch so a corrupt link never aborts the whole export.
+      String catName;
+      try {
+        catName = tx.category.value?.name ?? 'Uncategorized';
+      } catch (_) {
+        catName = 'Uncategorized';
+      }
+      rows.add([
+        DateFormat('yyyy-MM-dd').format(tx.date),
+        "Out",
+        catName,
+        tx.description,
+        tx.amount,
+      ]);
     }
 
     String csv = rows.map((row) {
@@ -186,13 +357,80 @@ class _ReviewScreenState extends State<ReviewScreen> {
         return val;
       }).join(',');
     }).join('\n');
-    
+
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/export_${provider.selectedMonth.month}_${provider.selectedMonth.year}.csv');
     await file.writeAsString(csv);
 
     final xfile = XFile(file.path);
-    await Share.shareXFiles([xfile], text: 'Monthly Finance Export');
+    await SharePlus.instance.share(
+      ShareParams(files: [xfile], text: 'Monthly Finance Export'),
+    );
+  }
+
+  Widget _ledgerTab(IconData icon, bool active, VoidCallback onTap) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: active ? AppTheme.accent.withOpacity(0.2) : Colors.transparent,
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Icon(icon, size: 18, color: active ? AppTheme.accent : AppTheme.textMuted),
+    ),
+  );
+
+  List<Widget> _buildListLedger(BuildContext context, List<dynamic> combinedList, BudgetProvider provider) {
+    return combinedList.map((item) {
+      final isExpense = item is TransactionModel;
+      final title = isExpense ? (item.category.value?.name ?? 'Unknown') : (item.title.isEmpty ? item.sourceCategory : item.title);
+      final sub = isExpense ? item.description : 'Income';
+      final amount = (item as dynamic).amount as double;
+      final date = (item as dynamic).date as DateTime;
+      final iconData = isExpense ? _getIconData(item.category.value?.icon ?? '') : Icons.south_west;
+      final iconColor = isExpense ? _fromHex(item.category.value?.colorHex ?? '#FFFFFF') : AppTheme.success;
+
+      return Dismissible(
+        key: Key(isExpense ? 'tx_${item.id}' : 'inf_${item.id}'),
+        direction: DismissDirection.endToStart,
+        background: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.only(right: 20),
+          alignment: Alignment.centerRight,
+          decoration: BoxDecoration(color: AppTheme.error, borderRadius: BorderRadius.circular(16)),
+          child: const Icon(Icons.delete, color: Colors.white),
+        ),
+        onDismissed: (_) {
+          if (isExpense) provider.deleteTransaction(item.id);
+          else provider.deleteInflow(item.id);
+        },
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(color: AppTheme.cardSurface, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF333333))),
+          child: ListTile(
+            onTap: isExpense ? () => _showEditTransactionSheet(context, provider, item as TransactionModel) : null,
+            leading: CircleAvatar(backgroundColor: iconColor.withOpacity(0.2), child: Icon(iconData, color: iconColor)),
+            title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('${DateFormat('MMM d').format(date)}${sub.isNotEmpty ? " • $sub" : ""}'),
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              if (isExpense && (item as TransactionModel).attachmentPath.isNotEmpty)
+                GestureDetector(
+                  onTap: () => AttachmentViewer.open(context, item.attachmentPath),
+                  child: Container(
+                    padding: const EdgeInsets.all(6), margin: const EdgeInsets.only(right: 6),
+                    decoration: BoxDecoration(color: AppTheme.accent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                    child: Icon(item.attachmentPath.toLowerCase().endsWith('.pdf') ? Icons.picture_as_pdf : Icons.image, size: 14, color: AppTheme.accent),
+                  ),
+                ),
+              Text('${isExpense ? "-" : "+"}${provider.currencySymbol}${amount.toStringAsFixed(0)}',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isExpense ? AppTheme.error : AppTheme.success)),
+              if (isExpense) ...[const SizedBox(width: 8), const Icon(Icons.edit, size: 14, color: AppTheme.textMuted)],
+            ]),
+          ),
+        ).animate().fade().slideX(begin: 0.1),
+      );
+    }).toList();
   }
 
   @override
@@ -205,37 +443,16 @@ class _ReviewScreenState extends State<ReviewScreen> {
         List<dynamic> combinedList = [...provider.monthlyInflows, ...provider.monthlyTransactions];
         combinedList.sort((a, b) => b.date.compareTo(a.date));
 
-        // Chart: Budgeted vs Actual — include any category with spending or a limit
-        double maxAxisValue = 0;
-        List<BarChartGroupData> barGroups = [];
-        List<CategoryModel> chartCats = [];
-        int index = 0;
-
-        for (var cat in provider.categories) {
+        // Category spending data for selected month
+        final catSpending = <_CatSpend>[];
+        for (final cat in provider.categories) {
           final spent = provider.transactions
               .where((t) => t.category.value?.id == cat.id && t.date.year == provider.selectedMonth.year && t.date.month == provider.selectedMonth.month)
               .fold(0.0, (s, t) => s + t.amount);
-
           if (spent == 0 && cat.limit <= 0) continue;
-
-          if (cat.limit > maxAxisValue) maxAxisValue = cat.limit;
-          if (spent > maxAxisValue) maxAxisValue = spent;
-
-          final rods = <BarChartRodData>[
-            if (cat.limit > 0)
-              BarChartRodData(toY: cat.limit, color: AppTheme.accentBlue.withOpacity(0.5), width: 12, borderRadius: BorderRadius.circular(4)),
-            BarChartRodData(
-              toY: spent,
-              color: cat.limit > 0 && spent > cat.limit ? AppTheme.error : AppTheme.success,
-              width: 12,
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ];
-
-          barGroups.add(BarChartGroupData(x: index, barRods: rods));
-          chartCats.add(cat);
-          index++;
+          catSpending.add(_CatSpend(cat: cat, spent: spent));
         }
+        catSpending.sort((a, b) => b.spent.compareTo(a.spent));
 
         return Scaffold(
           floatingActionButton: Padding(
@@ -244,12 +461,16 @@ class _ReviewScreenState extends State<ReviewScreen> {
               backgroundColor: AppTheme.accent,
               foregroundColor: Colors.black,
               child: const Icon(Icons.auto_graph_rounded),
-              onPressed: () => showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => _AnalyticsSheet(provider: provider, month: provider.selectedMonth),
-              ),
+              onPressed: () {
+                AdService.showInterstitial(onComplete: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => _AnalyticsSheet(provider: provider, month: provider.selectedMonth),
+                  );
+                });
+              },
             ),
           ),
           appBar: AppBar(
@@ -325,46 +546,25 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 ),
               ).animate().fade(delay: 100.ms).slideY(begin: -0.1),
 
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+              const Center(child: BannerAdWidget()),
+              const SizedBox(height: 24),
 
-              Text('Budget vs Actual', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)).animate().fade(delay: 200.ms),
+              Text('Spending by Category', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)).animate().fade(delay: 200.ms),
               const SizedBox(height: 16),
 
-              // Middle Section: Bar Chart
-              Container(
-                height: 250,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(color: AppTheme.cardSurface, borderRadius: BorderRadius.circular(24), border: Border.all(color: const Color(0xFF333333))),
-                child: barGroups.isEmpty ? const Center(child: Text('No spending this month', style: TextStyle(color: AppTheme.textMuted))) : BarChart(
-                  BarChartData(
-                    alignment: BarChartAlignment.spaceAround,
-                    maxY: maxAxisValue * 1.2,
-                    titlesData: FlTitlesData(
-                      show: true,
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          getTitlesWidget: (double value, TitleMeta meta) {
-                            final i = value.toInt();
-                            if (i >= 0 && i < chartCats.length) {
-                              final cat = chartCats[i];
-                              return Padding(padding: const EdgeInsets.only(top: 8), child: Icon(_getIconData(cat.icon), size: 16, color: _fromHex(cat.colorHex)));
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                      ),
-                      leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    ),
-                    gridData: const FlGridData(show: false),
-                    borderData: FlBorderData(show: false),
-                    barGroups: barGroups,
-                  ),
-                ),
-              ).animate().fade(delay: 300.ms).scale(),
-
+              catSpending.isEmpty
+                  ? Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(color: AppTheme.cardSurface, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF333333))),
+                      child: const Center(child: Text('No spending this month', style: TextStyle(color: AppTheme.textMuted))),
+                    )
+                  : _CategorySpendingList(
+                      catSpending: catSpending,
+                      currency: provider.currencySymbol,
+                      getIcon: _getIconData,
+                      fromHex: _fromHex,
+                    ).animate().fade(delay: 300.ms).slideY(begin: 0.05, end: 0),
 
               const SizedBox(height: 32),
 
@@ -373,13 +573,21 @@ class _ReviewScreenState extends State<ReviewScreen> {
               const SizedBox(height: 32),
 
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Ledger History', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                  Expanded(child: Text('Ledger History', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold))),
+                  // view toggle
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(color: AppTheme.cardSurface, borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xFF333333))),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      _ledgerTab(Icons.list_rounded, !_timelineView, () => setState(() => _timelineView = false)),
+                      _ledgerTab(Icons.timeline_rounded, _timelineView, () => setState(() => _timelineView = true)),
+                    ]),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.download, color: AppTheme.accent),
                     onPressed: () => _exportCsv(context, provider),
-                  )
+                  ),
                 ],
               ).animate().fade(delay: 400.ms),
               const SizedBox(height: 12),
@@ -392,10 +600,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   suffixIcon: provider.searchQuery.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.close, color: AppTheme.textMuted, size: 16),
-                          onPressed: () {
-                            _searchCtrl.clear();
-                            provider.setSearch('');
-                          },
+                          onPressed: () { _searchCtrl.clear(); provider.setSearch(''); },
                         )
                       : null,
                   filled: true,
@@ -409,83 +614,16 @@ class _ReviewScreenState extends State<ReviewScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Bottom Section: Grouped Transactions
-              ...combinedList.map((item) {
-                bool isExpense = item is TransactionModel;
-                String title = isExpense ? (item.category.value?.name ?? 'Unknown') : (item.title.isEmpty ? item.sourceCategory : item.title);
-                String sub = isExpense ? item.description : 'Income';
-                double amount = isExpense ? item.amount : item.amount;
-                DateTime date = isExpense ? item.date : item.date;
-
-                IconData iconData = isExpense ? _getIconData(item.category.value?.icon ?? '') : Icons.south_west;
-                Color iconColor = isExpense ? _fromHex(item.category.value?.colorHex ?? '#FFFFFF') : AppTheme.success;
-
-                return Dismissible(
-                  key: Key(isExpense ? 'tx_${item.id}' : 'inf_${item.id}'),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.only(right: 20),
-                    alignment: Alignment.centerRight,
-                    decoration: BoxDecoration(color: AppTheme.error, borderRadius: BorderRadius.circular(16)),
-                    child: const Icon(Icons.delete, color: Colors.white),
-                  ),
-                  onDismissed: (dir) {
-                    if (isExpense) provider.deleteTransaction(item.id);
-                    else provider.deleteInflow(item.id);
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.cardSurface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF333333)),
-                    ),
-                    child: ListTile(
-                      onTap: isExpense ? () => _showEditTransactionSheet(context, provider, item as TransactionModel) : null,
-                      leading: CircleAvatar(
-                        backgroundColor: iconColor.withOpacity(0.2),
-                        child: Icon(iconData, color: iconColor),
-                      ),
-                      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text('${DateFormat('MMM d').format(date)} ${sub.isNotEmpty ? "• $sub" : ""}'),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (isExpense && (item as TransactionModel).attachmentPath.isNotEmpty) ...[
-                            GestureDetector(
-                              onTap: () => AttachmentViewer.open(context, item.attachmentPath),
-                              child: Container(
-                                padding: const EdgeInsets.all(6),
-                                margin: const EdgeInsets.only(right: 6),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.accent.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Icon(
-                                  item.attachmentPath.toLowerCase().endsWith('.pdf')
-                                      ? Icons.picture_as_pdf
-                                      : Icons.image,
-                                  size: 14,
-                                  color: AppTheme.accent,
-                                ),
-                              ),
-                            ),
-                          ],
-                          Text(
-                            '${isExpense ? "-" : "+"}${provider.currencySymbol}${amount.toStringAsFixed(0)}',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isExpense ? AppTheme.error : AppTheme.success),
-                          ),
-                          if (isExpense) ...[
-                            const SizedBox(width: 8),
-                            const Icon(Icons.edit, size: 14, color: AppTheme.textMuted),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ).animate().fade().slideX(begin: 0.1),
-                );
-              }),
+              if (_timelineView)
+                _TimelineLedger(
+                  combinedList: combinedList,
+                  provider: provider,
+                  getIcon: _getIconData,
+                  fromHex: _fromHex,
+                  onEditTx: (tx) => _showEditTransactionSheet(context, provider, tx),
+                )
+              else
+                ..._buildListLedger(context, combinedList, provider),
 
               const SizedBox(height: 80),
             ],
@@ -776,6 +914,15 @@ class _AnalyticsSheetState extends State<_AnalyticsSheet> {
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
     final paceColor = pace['paceColor'] as Color;
 
+    // Month summary figures
+    final monthInflows = provider.inflows
+        .where((i) => i.date.year == month.year && i.date.month == month.month)
+        .fold(0.0, (s, i) => s + i.amount);
+    final monthTotalIncome = provider.totalIncome + monthInflows;
+    final monthTotalSpent = _monthTx.fold(0.0, (s, t) => s + t.amount);
+    final monthNet = monthTotalIncome - monthTotalSpent;
+    final savedFromGoal = monthNet - provider.savingsGoal;
+
     // Budget line: flat at pool
     final budgetSpots = [FlSpot(1, 0), FlSpot(daysInMonth.toDouble(), pool)];
     // Projected line from today to end of month (only for current month)
@@ -869,6 +1016,11 @@ class _AnalyticsSheetState extends State<_AnalyticsSheet> {
             ),
             const SizedBox(height: 20),
 
+            // ── SECTION 1: STATUS ════════════════════════════════════════
+            const _AnalyticsSectionHeader(
+                label: 'STATUS', subtitle: 'Where you stand right now'),
+            const SizedBox(height: 14),
+
             // ── Health Score ─────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(20),
@@ -903,7 +1055,97 @@ class _AnalyticsSheetState extends State<_AnalyticsSheet> {
                 ])),
               ]),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+
+            // ── Month Summary ─────────────────────────────────────────────
+            _AnalyticsCard(
+              title: isCurrentMonth ? 'Month So Far' : 'Month Summary',
+              icon: Icons.summarize_rounded,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // Income row
+                _SummaryRow(
+                  label: 'Total Income',
+                  value: '$cur${monthTotalIncome.toStringAsFixed(0)}',
+                  color: AppTheme.success,
+                  icon: Icons.south_west_rounded,
+                ),
+                const SizedBox(height: 8),
+                _SummaryRow(
+                  label: 'Total Spent',
+                  value: '− $cur${monthTotalSpent.toStringAsFixed(0)}',
+                  color: AppTheme.error,
+                  icon: Icons.north_east_rounded,
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Divider(color: Colors.white10, height: 1),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(
+                          monthNet >= 0 ? 'Net Saved' : 'Overspent',
+                          style: TextStyle(
+                            fontSize: 12, color: monthNet >= 0 ? AppTheme.success : AppTheme.error,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '${monthNet >= 0 ? '+' : '−'}$cur${monthNet.abs().toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontSize: 28, fontWeight: FontWeight.bold,
+                            color: monthNet >= 0 ? AppTheme.success : AppTheme.error,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ]),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: (monthNet >= 0 ? AppTheme.success : AppTheme.error).withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        monthNet >= 0 ? Icons.savings_rounded : Icons.warning_amber_rounded,
+                        color: monthNet >= 0 ? AppTheme.success : AppTheme.error,
+                        size: 26,
+                      ),
+                    ),
+                  ],
+                ),
+                if (!isCurrentMonth) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: (savedFromGoal >= 0 ? AppTheme.success : AppTheme.accent).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(children: [
+                      Icon(
+                        savedFromGoal >= 0 ? Icons.check_circle_outline : Icons.info_outline,
+                        size: 14,
+                        color: savedFromGoal >= 0 ? AppTheme.success : AppTheme.accent,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(
+                        savedFromGoal >= 0
+                            ? 'Met savings goal · $cur${savedFromGoal.toStringAsFixed(0)} extra saved'
+                            : 'Missed savings goal by $cur${savedFromGoal.abs().toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontSize: 12, height: 1.4,
+                          color: savedFromGoal >= 0 ? AppTheme.success : AppTheme.accent,
+                        ),
+                      )),
+                    ]),
+                  ),
+                ],
+              ]),
+            ),
+            const SizedBox(height: 14),
 
             // ── Pace / Burn Rate ─────────────────────────────────────────
             _AnalyticsCard(
@@ -946,30 +1188,32 @@ class _AnalyticsSheetState extends State<_AnalyticsSheet> {
                 ),
               ]),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
-            // ── Safe to Spend ────────────────────────────────────────────
-            _AnalyticsCard(
-              title: 'Safe to Spend Right Now',
-              icon: Icons.wallet_rounded,
-              child: Row(children: [
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('$cur${safeToSpend.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      fontSize: 36, fontWeight: FontWeight.bold,
-                      color: safeToSpend > 0 ? AppTheme.success : AppTheme.error,
-                    )),
-                  const SizedBox(height: 4),
-                  Text(
-                    safeToSpend > 0
-                        ? 'You can spend this freely without touching savings or missing any bill'
-                        : 'You have exceeded your discretionary budget',
-                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.4),
-                  ),
-                ])),
-              ]),
-            ),
-            const SizedBox(height: 12),
+            // ── Safe to Spend (current month only) ──────────────────────
+            if (isCurrentMonth) ...[
+              _AnalyticsCard(
+                title: 'Safe to Spend Right Now',
+                icon: Icons.wallet_rounded,
+                child: Row(children: [
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('$cur${safeToSpend.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontSize: 36, fontWeight: FontWeight.bold,
+                        color: safeToSpend > 0 ? AppTheme.success : AppTheme.error,
+                      )),
+                    const SizedBox(height: 4),
+                    Text(
+                      safeToSpend > 0
+                          ? 'You can spend this freely without touching savings or missing any bill'
+                          : 'You have exceeded your discretionary budget',
+                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.4),
+                    ),
+                  ])),
+                ]),
+              ),
+              const SizedBox(height: 14),
+            ],
 
             // ── Projection Chart ─────────────────────────────────────────
             _AnalyticsCard(
@@ -1037,7 +1281,12 @@ class _AnalyticsSheetState extends State<_AnalyticsSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 24),
+
+            // ── SECTION 2: PATTERNS ══════════════════════════════════════
+            const _AnalyticsSectionHeader(
+                label: 'PATTERNS', subtitle: 'How your spending behaves'),
+            const SizedBox(height: 14),
 
             // ── Anomalies ────────────────────────────────────────────────
             _AnalyticsCard(
@@ -1069,39 +1318,7 @@ class _AnalyticsSheetState extends State<_AnalyticsSheet> {
                       )).toList(),
                     ),
             ),
-            const SizedBox(height: 12),
-
-            // ── Opportunity Cost ─────────────────────────────────────────
-            _AnalyticsCard(
-              title: 'Opportunity Cost',
-              icon: Icons.trending_up_rounded,
-              child: monthlyOverspend <= 0
-                  ? const Row(children: [
-                      Icon(Icons.check_circle_outline, color: AppTheme.success, size: 18),
-                      SizedBox(width: 8),
-                      Expanded(child: Text('No overspend this month — you\'re building wealth!', style: TextStyle(color: AppTheme.textMuted))),
-                    ])
-                  : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('If you invested your $cur${monthlyOverspend.toStringAsFixed(0)}/mo overspend at 7% annual return:',
-                          style: const TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.4)),
-                      const SizedBox(height: 14),
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                        _OppCostColumn(label: '10 yrs', value: oppCost['fv10'] as double, currency: cur),
-                        _OppCostColumn(label: '20 yrs', value: oppCost['fv20'] as double, currency: cur),
-                        _OppCostColumn(label: '30 yrs', value: oppCost['fv30'] as double, currency: cur),
-                      ]),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: AppTheme.error.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                        child: Text(
-                          '💸 Every $cur${monthlyOverspend.toStringAsFixed(0)} you overspend this month costs you $cur${(oppCost['fv10'] as double).toStringAsFixed(0)} in potential wealth over 10 years.',
-                          style: const TextStyle(color: AppTheme.error, fontSize: 12, height: 1.5),
-                        ),
-                      ),
-                    ]),
-            ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
             // ── Pareto Drain ─────────────────────────────────────────────
             _AnalyticsCard(
@@ -1148,7 +1365,7 @@ class _AnalyticsSheetState extends State<_AnalyticsSheet> {
                       }),
                     ]),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
             // ── Time Heatmap ─────────────────────────────────────────────
             _AnalyticsCard(
@@ -1200,7 +1417,44 @@ class _AnalyticsSheetState extends State<_AnalyticsSheet> {
                 }),
               ]),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 24),
+
+            // ── SECTION 3: FORECASTS ═════════════════════════════════════
+            const _AnalyticsSectionHeader(
+                label: 'FORECASTS', subtitle: 'What might come next'),
+            const SizedBox(height: 14),
+
+            // ── Opportunity Cost ─────────────────────────────────────────
+            _AnalyticsCard(
+              title: 'Opportunity Cost',
+              icon: Icons.trending_up_rounded,
+              child: monthlyOverspend <= 0
+                  ? const Row(children: [
+                      Icon(Icons.check_circle_outline, color: AppTheme.success, size: 18),
+                      SizedBox(width: 8),
+                      Expanded(child: Text('No overspend this month — you\'re building wealth!', style: TextStyle(color: AppTheme.textMuted))),
+                    ])
+                  : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('If you invested your $cur${monthlyOverspend.toStringAsFixed(0)}/mo overspend at 7% annual return:',
+                          style: const TextStyle(color: AppTheme.textMuted, fontSize: 12, height: 1.4)),
+                      const SizedBox(height: 14),
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                        _OppCostColumn(label: '10 yrs', value: oppCost['fv10'] as double, currency: cur),
+                        _OppCostColumn(label: '20 yrs', value: oppCost['fv20'] as double, currency: cur),
+                        _OppCostColumn(label: '30 yrs', value: oppCost['fv30'] as double, currency: cur),
+                      ]),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: AppTheme.error.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                        child: Text(
+                          '💸 Every $cur${monthlyOverspend.toStringAsFixed(0)} you overspend this month costs you $cur${(oppCost['fv10'] as double).toStringAsFixed(0)} in potential wealth over 10 years.',
+                          style: const TextStyle(color: AppTheme.error, fontSize: 12, height: 1.5),
+                        ),
+                      ),
+                    ]),
+            ),
+            const SizedBox(height: 14),
 
             // ── Markov Chain Prediction ──────────────────────────────────
             _AnalyticsCard(
@@ -1286,6 +1540,56 @@ class _OppCostColumn extends StatelessWidget {
       const SizedBox(height: 4),
       Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
     ]);
+  }
+}
+
+// Section divider for the analytics sheet — groups related cards under a
+// single header so the sheet stops feeling like a long undifferentiated list.
+class _AnalyticsSectionHeader extends StatelessWidget {
+  final String label;
+  final String subtitle;
+  const _AnalyticsSectionHeader({required this.label, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 3,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: AppTheme.accent,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppTheme.textLight,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2.0,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 13),
+            child: Text(
+              subtitle,
+              style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1684,6 +1988,505 @@ class _DayRow extends StatelessWidget {
           ),
         ),
       ]),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final IconData icon;
+  const _SummaryRow({required this.label, required this.value, required this.color, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+        ]),
+        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+      ],
+    );
+  }
+}
+
+// ── Category Spending List ────────────────────────────────────────────────────
+
+class _CatSpend {
+  final CategoryModel cat;
+  final double spent;
+  const _CatSpend({required this.cat, required this.spent});
+}
+
+class _CategorySpendingList extends StatelessWidget {
+  final List<_CatSpend> catSpending;
+  final String currency;
+  final IconData Function(String) getIcon;
+  final Color Function(String) fromHex;
+
+  const _CategorySpendingList({
+    required this.catSpending,
+    required this.currency,
+    required this.getIcon,
+    required this.fromHex,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final totalSpent = catSpending.fold(0.0, (s, c) => s + c.spent);
+    final maxSpent = catSpending.fold(0.0, (s, c) => s > c.spent ? s : c.spent);
+
+    // Split lifestyle and fixed
+    final lifestyle = catSpending.where((c) => c.cat.type == CategoryType.variable).toList();
+    final fixed = catSpending.where((c) => c.cat.type == CategoryType.fixed).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.cardSurface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFF333333)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Total pill at top
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '$currency${totalSpent.toStringAsFixed(0)} total',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  '${catSpending.length} categories',
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                ),
+              ],
+            ),
+          ),
+          const Divider(color: Colors.white10, height: 24),
+
+          if (lifestyle.isNotEmpty) ...[
+            _SectionLabel('Lifestyle', Icons.local_fire_department_rounded, AppTheme.accent),
+            ...lifestyle.map((c) => _CatRow(c: c, totalSpent: totalSpent, maxSpent: maxSpent, currency: currency, getIcon: getIcon, fromHex: fromHex)),
+            if (fixed.isNotEmpty) const Divider(color: Colors.white10, height: 24),
+          ],
+          if (fixed.isNotEmpty) ...[
+            _SectionLabel('Fixed Bills', Icons.receipt_long_rounded, AppTheme.accentBlue),
+            ...fixed.map((c) => _CatRow(c: c, totalSpent: totalSpent, maxSpent: maxSpent, currency: currency, getIcon: getIcon, fromHex: fromHex)),
+          ],
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  final IconData icon;
+  final Color color;
+  const _SectionLabel(this.text, this.icon, this.color);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      child: Row(children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 6),
+        Text(text.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: color, letterSpacing: 1.1)),
+      ]),
+    );
+  }
+}
+
+class _CatRow extends StatelessWidget {
+  final _CatSpend c;
+  final double totalSpent;
+  final double maxSpent;
+  final String currency;
+  final IconData Function(String) getIcon;
+  final Color Function(String) fromHex;
+
+  const _CatRow({
+    required this.c,
+    required this.totalSpent,
+    required this.maxSpent,
+    required this.currency,
+    required this.getIcon,
+    required this.fromHex,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = fromHex(c.cat.colorHex);
+    final hasLimit = c.cat.limit > 0;
+    final pct = hasLimit ? (c.spent / c.cat.limit).clamp(0.0, 1.0) : 0.0;
+    // Bar shows progress toward THIS category's own limit (intuitive: empty
+    // bar = nothing spent, full bar = at limit, red = over). Categories
+    // without a limit fall back to relative-to-max comparison.
+    final barFrac = hasLimit
+        ? (c.spent / c.cat.limit).clamp(0.0, 1.0)
+        : (maxSpent > 0 ? c.spent / maxSpent : 0.0);
+    final isOver = hasLimit && c.spent > c.cat.limit;
+    final shareOfTotal = totalSpent > 0 ? (c.spent / totalSpent * 100) : 0.0;
+
+    // Show "<1%" for tiny fractions so a real ₹40 spend doesn't display
+    // as "0% of limit" against an ₹8.9k limit.
+    String fmtPct(double p) {
+      if (p <= 0) return '0%';
+      if (p < 1) return '<1%';
+      return '${p.toStringAsFixed(0)}%';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            // Icon
+            Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(getIcon(c.cat.icon), size: 15, color: color),
+            ),
+            const SizedBox(width: 12),
+            // Name + share
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Expanded(child: Text(c.cat.name,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis)),
+                  if (isOver)
+                    Container(
+                      margin: const EdgeInsets.only(left: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppTheme.error.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text('Over', style: TextStyle(fontSize: 9, color: AppTheme.error, fontWeight: FontWeight.bold)),
+                    ),
+                ]),
+                const SizedBox(height: 1),
+                Text(
+                  hasLimit
+                      ? '${fmtPct(pct * 100)} of ${currency}${c.cat.limit >= 1000 ? '${(c.cat.limit / 1000).toStringAsFixed(1)}k' : c.cat.limit.toStringAsFixed(0)} limit'
+                      : 'No limit set',
+                  style: const TextStyle(fontSize: 10, color: AppTheme.textMuted),
+                ),
+              ],
+            )),
+            const SizedBox(width: 12),
+            // Amount
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('$currency${c.spent >= 1000 ? '${(c.spent / 1000).toStringAsFixed(1)}k' : c.spent.toStringAsFixed(0)}',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold,
+                      color: isOver ? AppTheme.error : Colors.white)),
+              if (hasLimit)
+                Text('/ $currency${c.cat.limit >= 1000 ? '${(c.cat.limit / 1000).toStringAsFixed(1)}k' : c.cat.limit.toStringAsFixed(0)}',
+                    style: const TextStyle(fontSize: 10, color: AppTheme.textMuted)),
+            ]),
+          ]),
+          const SizedBox(height: 8),
+          // Progress bar: fills as spend approaches the limit; red when over.
+          LayoutBuilder(builder: (_, constraints) {
+            final w = constraints.maxWidth;
+            return Stack(children: [
+              // Background track
+              Container(
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              // Spend bar
+              Container(
+                height: 5,
+                width: w * barFrac,
+                decoration: BoxDecoration(
+                  color: isOver ? AppTheme.error : color,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ]);
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Timeline Ledger ───────────────────────────────────────────────────────────
+
+class _TimelineLedger extends StatelessWidget {
+  final List<dynamic> combinedList;
+  final BudgetProvider provider;
+  final IconData Function(String) getIcon;
+  final Color Function(String) fromHex;
+  final void Function(TransactionModel) onEditTx;
+
+  const _TimelineLedger({
+    required this.combinedList,
+    required this.provider,
+    required this.getIcon,
+    required this.fromHex,
+    required this.onEditTx,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (combinedList.isEmpty) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 32),
+        child: Text('No transactions', style: TextStyle(color: AppTheme.textMuted)),
+      ));
+    }
+
+    // Group by day
+    final Map<String, List<dynamic>> grouped = {};
+    for (final item in combinedList) {
+      final date = (item as dynamic).date as DateTime;
+      final key = DateFormat('yyyy-MM-dd').format(date);
+      grouped.putIfAbsent(key, () => []).add(item);
+    }
+    final sortedKeys = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: sortedKeys.map((key) {
+        final items = grouped[key]!;
+        final date = DateTime.parse(key);
+        final dayTotal = items.fold(0.0, (s, item) {
+          final isExpense = item is TransactionModel;
+          return s + (isExpense ? -(item as dynamic).amount : (item as dynamic).amount);
+        });
+        final isToday = DateFormat('yyyy-MM-dd').format(DateTime.now()) == key;
+
+        return _TimelineDay(
+          date: date,
+          items: items,
+          dayTotal: dayTotal,
+          isToday: isToday,
+          provider: provider,
+          getIcon: getIcon,
+          fromHex: fromHex,
+          onEditTx: onEditTx,
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _TimelineDay extends StatelessWidget {
+  final DateTime date;
+  final List<dynamic> items;
+  final double dayTotal;
+  final bool isToday;
+  final BudgetProvider provider;
+  final IconData Function(String) getIcon;
+  final Color Function(String) fromHex;
+  final void Function(TransactionModel) onEditTx;
+
+  const _TimelineDay({
+    required this.date,
+    required this.items,
+    required this.dayTotal,
+    required this.isToday,
+    required this.provider,
+    required this.getIcon,
+    required this.fromHex,
+    required this.onEditTx,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cur = provider.currencySymbol;
+    final totalColor = dayTotal >= 0 ? AppTheme.success : AppTheme.error;
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Timeline spine ──────────────────────────────────────────────
+          SizedBox(
+            width: 52,
+            child: Column(
+              children: [
+                // Checkpoint node
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: isToday ? AppTheme.accent : AppTheme.cardSurface,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isToday ? AppTheme.accent : Colors.white24,
+                      width: isToday ? 2 : 1,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${date.day}',
+                      style: TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold,
+                        color: isToday ? Colors.black : Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                // Spine line down
+                Expanded(
+                  child: Center(
+                    child: Container(width: 1.5, color: Colors.white12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Day content ─────────────────────────────────────────────────
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Day header
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, bottom: 10),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(
+                            isToday ? 'Today' : DateFormat('EEEE').format(date),
+                            style: TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.bold,
+                              color: isToday ? AppTheme.accent : Colors.white,
+                            ),
+                          ),
+                          Text(
+                            DateFormat('d MMMM').format(date),
+                            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                          ),
+                        ]),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: totalColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${dayTotal >= 0 ? "+" : ""}$cur${dayTotal.abs().toStringAsFixed(0)}',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: totalColor),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Transaction cards
+                  ...items.map((item) {
+                    final isExpense = item is TransactionModel;
+                    final title = isExpense
+                        ? (item.category.value?.name ?? 'Unknown')
+                        : (item.title.isEmpty ? item.sourceCategory : item.title);
+                    final sub = isExpense ? item.description : 'Income';
+                    final amount = (item as dynamic).amount as double;
+                    final time = DateFormat('h:mm a').format((item as dynamic).date as DateTime);
+                    final iconData = isExpense ? getIcon(item.category.value?.icon ?? '') : Icons.south_west;
+                    final iconColor = isExpense ? fromHex(item.category.value?.colorHex ?? '#FFFFFF') : AppTheme.success;
+
+                    return Dismissible(
+                      key: Key(isExpense ? 'tl_tx_${item.id}' : 'tl_inf_${item.id}'),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.only(right: 16),
+                        alignment: Alignment.centerRight,
+                        decoration: BoxDecoration(color: AppTheme.error, borderRadius: BorderRadius.circular(14)),
+                        child: const Icon(Icons.delete, color: Colors.white, size: 18),
+                      ),
+                      onDismissed: (_) {
+                        if (isExpense) provider.deleteTransaction(item.id);
+                        else provider.deleteInflow(item.id);
+                      },
+                      child: GestureDetector(
+                        onTap: isExpense ? () => onEditTx(item as TransactionModel) : null,
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppTheme.cardSurface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFF2A2A2A)),
+                          ),
+                          child: Row(children: [
+                            Container(
+                              width: 34, height: 34,
+                              decoration: BoxDecoration(color: iconColor.withOpacity(0.15), borderRadius: BorderRadius.circular(9)),
+                              child: Icon(iconData, size: 16, color: iconColor),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+                              Text(
+                                sub.isNotEmpty ? '$time · $sub' : time,
+                                style: const TextStyle(fontSize: 10, color: AppTheme.textMuted),
+                              ),
+                            ])),
+                            const SizedBox(width: 8),
+                            if (isExpense && (item as TransactionModel).attachmentPath.isNotEmpty) ...[
+                              GestureDetector(
+                                onTap: () => AttachmentViewer.open(context, item.attachmentPath),
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  margin: const EdgeInsets.only(right: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.accent.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    item.attachmentPath.toLowerCase().endsWith('.pdf') ? Icons.picture_as_pdf : Icons.image,
+                                    size: 13, color: AppTheme.accent,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            Text(
+                              '${isExpense ? "−" : "+"}$cur${amount.toStringAsFixed(0)}',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isExpense ? AppTheme.error : AppTheme.success),
+                            ),
+                            if (isExpense) ...[
+                              const SizedBox(width: 6),
+                              const Icon(Icons.edit, size: 12, color: AppTheme.textMuted),
+                            ],
+                          ]),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

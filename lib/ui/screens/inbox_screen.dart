@@ -89,28 +89,50 @@ class InboxScreen extends StatelessWidget {
                               const SizedBox(height: 8),
                               Text(DateFormat('MMM d, h:mm a').format(pt.timestamp), style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
                               const SizedBox(height: 16),
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: provider.categories.map((cat) {
-                                    return GestureDetector(
-                                      onTap: () {
-                                        provider.categorizePendingTransaction(pt.id, cat.id);
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                        margin: const EdgeInsets.only(right: 8),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.cardSurface,
-                                          borderRadius: BorderRadius.circular(20),
-                                          border: Border.all(color: AppTheme.textMuted.withOpacity(0.2)),
+                              if (provider.categories.isEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.error.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: AppTheme.error.withOpacity(0.3)),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.info_outline, color: AppTheme.error, size: 18),
+                                      SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Create a category in Budget tab to categorize this',
+                                          style: TextStyle(fontSize: 12, color: AppTheme.error),
                                         ),
-                                        child: Text(cat.name, style: const TextStyle(fontSize: 14)),
                                       ),
-                                    );
-                                  }).toList(),
-                                ),
-                              )
+                                    ],
+                                  ),
+                                )
+                              else
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: provider.categories.map((cat) {
+                                      return GestureDetector(
+                                        onTap: () {
+                                          provider.categorizePendingTransaction(pt.id, cat.id);
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                          margin: const EdgeInsets.only(right: 8),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.cardSurface,
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(color: AppTheme.textMuted.withOpacity(0.2)),
+                                          ),
+                                          child: Text(cat.name, style: const TextStyle(fontSize: 14)),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                )
                             ],
                           ),
                         ).animate().fade().slideX(begin: 0.1),

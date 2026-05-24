@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:isar_community/isar.dart';
 import '../../logic/providers/budget_provider.dart';
 import '../../core/theme/app_theme.dart';
 
@@ -23,19 +24,17 @@ class TransactionHistoryScreen extends StatelessWidget {
             itemCount: provider.transactions.length,
             itemBuilder: (context, index) {
               final tx = provider.transactions[index];
-              final cat = provider.categories.firstWhere(
-                (c) => c.id == tx.categoryId, 
-                orElse: () => provider.categories.isNotEmpty ? provider.categories.first : throw Exception('No cat')
-              );
+              final catName = tx.category.value?.name ?? 'Unknown';
               return ListTile(
                 leading: const CircleAvatar(
-                  backgroundColor: AppTheme.surface,
+                  backgroundColor: AppTheme.cardSurface,
                   child: Icon(Icons.receipt_long, color: AppTheme.accent),
                 ),
-                title: Text(tx.description.isNotEmpty ? tx.description : cat.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                title: Text(tx.description.isNotEmpty ? tx.description : catName,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text(DateFormat.yMMMd().format(tx.date)),
                 trailing: Text(
-                  '-\$${tx.amount.toStringAsFixed(2)}',
+                  '-${provider.currencySymbol}${tx.amount.toStringAsFixed(2)}',
                   style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.error, fontSize: 16),
                 ),
               );
@@ -56,37 +55,37 @@ class TransactionHistoryScreen extends StatelessWidget {
     final amountCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final provider = context.read<BudgetProvider>();
-    
+
     if (provider.categories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please add a category first.')));
       return;
     }
 
-    String selectedCategoryId = provider.categories.first.id;
+    Id selectedCategoryId = provider.categories.first.id;
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surface,
+        backgroundColor: AppTheme.cardSurface,
         title: const Text('Add Transaction'),
         content: StatefulBuilder(
           builder: (context, setState) {
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                DropdownButtonFormField<String>(
+                DropdownButtonFormField<Id>(
                   value: selectedCategoryId,
                   decoration: const InputDecoration(labelText: 'Category', filled: true),
                   items: provider.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))).toList(),
                   onChanged: (v) => setState(() => selectedCategoryId = v!),
                 ),
                 const SizedBox(height: 12),
-                TextField(controller: amountCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Amount (\$)', filled: true)),
+                TextField(controller: amountCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Amount', filled: true)),
                 const SizedBox(height: 12),
                 TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Description', filled: true)),
               ],
             );
-          }
+          },
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
@@ -99,9 +98,9 @@ class TransactionHistoryScreen extends StatelessWidget {
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accent, foregroundColor: Colors.black),
             child: const Text('Save'),
-          )
+          ),
         ],
-      )
+      ),
     );
   }
 }

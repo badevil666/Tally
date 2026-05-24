@@ -9,7 +9,7 @@ import 'package:open_filex/open_filex.dart';
 import '../../logic/providers/budget_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/category_model.dart';
-import 'package:isar/isar.dart';
+import 'package:isar_community/isar.dart';
 
 class QuickAddModal extends StatefulWidget {
   const QuickAddModal({super.key});
@@ -23,6 +23,14 @@ class _QuickAddModalState extends State<QuickAddModal> {
   final _noteCtrl = TextEditingController();
   Id? _selectedCategoryId;
   String? _attachmentPath; // local path of picked file (before saving)
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    _noteCtrl.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickAttachment() async {
     // file_picker uses Android's SAF — the system handles permissions internally.
@@ -67,7 +75,12 @@ class _QuickAddModalState extends State<QuickAddModal> {
           TextField(
             controller: _amountCtrl,
             autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: false),
+            inputFormatters: [
+              // Allow only digits and a single decimal point with up to 2 places.
+              // Blocks "-" so a user can't type a negative amount.
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+            ],
             style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: AppTheme.accent),
             decoration: InputDecoration(
               prefixText: '${provider.currencySymbol} ',
@@ -149,54 +162,73 @@ class _QuickAddModalState extends State<QuickAddModal> {
 
           const SizedBox(height: 24),
           ElevatedButton(
-            onPressed: () async {
-              if (_amountCtrl.text.isNotEmpty && _selectedCategoryId != null) {
-                HapticFeedback.heavyImpact();
-                final amount = double.tryParse(_amountCtrl.text) ?? 0;
-                if (amount <= 0) return;
+            onPressed: _saving
+                ? null
+                : () async {
+                    if (_amountCtrl.text.isEmpty || _selectedCategoryId == null) return;
+                    final amount = double.tryParse(_amountCtrl.text) ?? 0;
+                    if (amount <= 0) return;
 
-                // Capture piggy balance before — addTransaction auto-deducts if overspent
-                final piggyBefore = provider.piggyBankBalance;
-                await provider.addTransaction(
-                  _selectedCategoryId!, amount, _noteCtrl.text,
-                  attachmentSourcePath: _attachmentPath,
-                );
-                final piggyAfter = provider.piggyBankBalance;
-                final deducted = (piggyBefore - piggyAfter).clamp(0.0, double.infinity);
+                    setState(() => _saving = true);
+                    HapticFeedback.heavyImpact();
 
-                if (deducted > 0 && context.mounted) {
-                  final tomorrow = DateTime.now().add(const Duration(days: 1));
-                  final newDailyLimit = provider.dailyLimitFor(tomorrow);
-                  final remainingMonthly = provider.remainingToSpend;
-                  Navigator.pop(context); // close modal first
-                  if (context.mounted) {
-                    await showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => _PiggyRaidSheet(
-                        deducted: deducted,
-                        piggyBefore: piggyBefore,
-                        piggyAfter: piggyAfter,
-                        newDailyLimit: newDailyLimit,
-                        remainingMonthly: remainingMonthly,
-                        currency: provider.currencySymbol,
-                      ),
-                    );
-                  }
-                  return;
-                }
+                    try {
+                      // Capture piggy balance before — addTransaction auto-deducts if overspent
+                      final piggyBefore = provider.piggyBankBalance;
+                      await provider.addTransaction(
+                        _selectedCategoryId!, amount, _noteCtrl.text,
+                        attachmentSourcePath: _attachmentPath,
+                      );
+                      final piggyAfter = provider.piggyBankBalance;
+                      final deducted =
+                          (piggyBefore - piggyAfter).clamp(0.0, double.infinity);
 
-                if (context.mounted) Navigator.pop(context);
-              }
-            },
+                      if (!mounted) return;
+
+                      if (deducted > 0) {
+                        final tomorrow = DateTime.now().add(const Duration(days: 1));
+                        final newDailyLimit = provider.dailyLimitFor(tomorrow);
+                        final remainingMonthly = provider.remainingToSpend;
+                        Navigator.pop(context); // close modal first
+                        if (!mounted) return;
+                        await showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) => _PiggyRaidSheet(
+                            deducted: deducted,
+                            piggyBefore: piggyBefore,
+                            piggyAfter: piggyAfter,
+                            newDailyLimit: newDailyLimit,
+                            remainingMonthly: remainingMonthly,
+                            currency: provider.currencySymbol,
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (mounted) Navigator.pop(context);
+                    } finally {
+                      if (mounted) setState(() => _saving = false);
+                    }
+                  },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.accent,
               foregroundColor: Colors.black,
               minimumSize: const Size(double.infinity, 56),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
             ),
-            child: const Text('Save Expense', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            child: _saving
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.black,
+                    ),
+                  )
+                : const Text('Save Expense',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
