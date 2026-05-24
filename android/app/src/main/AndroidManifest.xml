@@ -1,19 +1,26 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.RECEIVE_SMS"/>
     <uses-permission android:name="android.permission.READ_SMS"/>
-    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Camera: UPI QR scanning (Scan & Pay feature) -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- Explicitly remove phone-state and call permissions injected by telephony package -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" tools:node="remove"/>
+    <uses-permission android:name="android.permission.CALL_PHONE" tools:node="remove"/>
 
-    <!-- File picker: images/videos on Android 13+ (API 33+) -->
+    <!-- File picker: images on Android 13+ (API 33+) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
+    <!-- Explicitly remove video permission injected by file_picker -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove"/>
     <!-- File picker: general storage on Android 12 and below -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
-    <!-- Exact alarm for the 8pm evening notification -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <application
-        android:label="keep"
+        android:label="Tally"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity
@@ -56,6 +63,9 @@
                 android:resource="@xml/file_paths" />
         </provider>
         <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-1512419225626475~6655375049"/>
+        <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
@@ -83,6 +93,13 @@
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:mimeType="*/*"/>
+        </intent>
+        <!-- UPI: required on Android 11+ so we can launch upi://pay deep
+             links to installed UPI apps (GPay, PhonePe, Paytm, BHIM, etc).
+             Without this query the chooser appears empty. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="upi"/>
         </intent>
     </queries>
 </manifest>
