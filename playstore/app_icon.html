@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 512px; height: 512px; overflow: hidden; background: #000; }
+
+  .icon {
+    width: 512px;
+    height: 512px;
+    background:
+      radial-gradient(ellipse 80% 80% at 50% 45%, #1a1a1a 0%, #0a0a0a 80%, #000 100%);
+    position: relative;
+  }
+
+  .icon svg { width: 100%; height: 100%; display: block; }
+
+  /* subtle vignette on top of everything for depth */
+  .icon::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 100% 100% at 50% 50%, transparent 50%, rgba(0,0,0,0.45) 100%);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div class="icon">
+  <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <!-- Brush-stroke roughening: gentle turbulence + tiny displacement
+           gives the bars an organic edge without breaking them up. -->
+      <filter id="brush" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.015"
+                      numOctaves="1" seed="4"/>
+        <feDisplacementMap in="SourceGraphic" scale="3"
+                           xChannelSelector="R" yChannelSelector="G"/>
+      </filter>
+
+      <!-- Slight gradient on the gold for a richer aged-brass feel -->
+      <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"  stop-color="#E8C45F"/>
+        <stop offset="100%" stop-color="#C19A3A"/>
+      </linearGradient>
+    </defs>
+
+    <!-- ━━━ Tally symbol: 4 vertical bars + 1 diagonal slash ━━━━━━━━━━━
+         Using solid gold (no gradient) — gradient on zero-width vertical
+         lines collapses. Bars are drawn first, then the diagonal on top. -->
+    <g filter="url(#brush)" fill="none"
+       stroke="#D4AF37" stroke-width="22" stroke-linecap="round">
+      <!-- 4 vertical bars, evenly spaced and centered -->
+      <line x1="170" y1="90"  x2="170" y2="320"/>
+      <line x1="220" y1="90"  x2="220" y2="320"/>
+      <line x1="270" y1="90"  x2="270" y2="320"/>
+      <line x1="320" y1="90"  x2="320" y2="320"/>
+      <!-- 5th tally — diagonal slash across the 4 verticals -->
+      <line x1="140" y1="245" x2="350" y2="165" stroke-width="24"/>
+    </g>
+
+    <!-- ━━━ TALLY wordmark ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <text x="256" y="450"
+          text-anchor="middle"
+          font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif"
+          font-size="92"
+          font-weight="900"
+          letter-spacing="6"
+          fill="#D4AF37">TALLY</text>
+  </svg>
+</div>
+</body>
+</html>
